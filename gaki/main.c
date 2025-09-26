@@ -4,6 +4,14 @@
 #include <time.h>
 #include <ctype.h>
 
+void tui_fmt_clear_line(So *out, size_t n) {
+    if(n) {
+        so_fmt(out, "\x1b[s");
+        so_fmt(out, "%*s", n, "");
+        so_fmt(out, "\x1b[u");
+    }
+}
+
 typedef struct Fx {
     unsigned char *col;
 } Fx;
@@ -176,8 +184,14 @@ void render_file_info(So *out, State *st, File_Info *info) {
 void select_up(State *st) {
     if(!st->select) {
         st->select = file_infos_length(st->infos) - 1;
+        st->offset = st->select + 1 > st->rect_files.dimension.y ? st->select + 1 - st->rect_files.dimension.y : 0;
+        if(st->offset) st->render.filenames = true;
     } else {
         --st->select;
+        if(st->offset) {
+            --st->offset;
+            st->render.filenames = true;
+        }
     }
 }
 
@@ -185,6 +199,12 @@ void select_down(State *st) {
     ++st->select;
     if(st->select >= file_infos_length(st->infos)) {
         st->select = 0;
+        if(st->offset) st->render.filenames = true;
+        st->offset = 0;
+    }
+    if(st->select >= st->offset + st->rect_files.dimension.y) {
+        ++st->offset;
+        st->render.filenames = true;
     }
 }
 
@@ -225,6 +245,11 @@ void signal_winch(int x) {
     so_al_config(&st->al.preview, 0, 0, st->rect_preview.dimension.x, 1, &st->alc);
     so_al_config(&st->al.header, 0, 0, st->dimension.x, 1, &st->alc);
     st->render.all = true;
+
+    /* patch selection */
+    if(st->select >= st->offset + st->rect_files.dimension.y) {
+        st->offset = st->select + 1 > st->rect_files.dimension.y ? st->select + 1 - st->rect_files.dimension.y : 0;
+    }
 
     /* patch wave */
     if(stdiff.wave_width) {
@@ -278,10 +303,14 @@ int main(void) {
                     case 'g': 
                               st.render.select = true;
                               st.select = 0;
+                              if(st.offset) st.render.filenames = true;
+                              st.offset = 0;
                               break;
                     case 'G': 
                               st.render.select = true;
                               st.select = file_infos_length(st.infos) - 1;
+                              st.offset = st.select + 1 > st.rect_files.dimension.y ? st.select + 1 - st.rect_files.dimension.y : 0;
+                              if(st.offset) st.render.filenames = true;
                               break;
                     default:
                               break;
@@ -306,7 +335,7 @@ int main(void) {
                     select_up(&st);
                 }
                 if(input.mouse.l || input.mouse.m || input.mouse.r) {
-                    size_t y = input.mouse.pos.y - 1;
+                    size_t y = input.mouse.pos.y - st.rect_files.anchor.y + st.offset;
                     if(y < file_infos_length(st.infos)) st.select = y;
                     st.render.select = true;
                 }
@@ -382,12 +411,13 @@ int main(void) {
         if(st.render.filenames) {
             file_infos_free(&st.infos);
             read_dir(so("."), &st.infos);
-            for(size_t i = 0; i < file_infos_length(st.infos); ++i) {
-                if(i < st.rect_files.dimension.y) {
+            for(size_t i = st.offset; i < file_infos_length(st.infos); ++i) {
+                if(i - st.offset < st.rect_files.dimension.y) {
                     Fx fx = {0};
                     array_push(st.fx, fx);
 
-                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + i));
+                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + i - st.offset));
+                    tui_fmt_clear_line(&out, st.rect_files.dimension.x);
                     File_Info *info = file_infos_get_at(&st.infos, i);
                     render_file_info(&out, &st, info);
 
@@ -398,13 +428,13 @@ int main(void) {
         }
         if(st.render.select) {
             st.render.preview = true;
-            if(stdiff.select < file_infos_length(st.infos)) {
-                if(stdiff.select < st.rect_files.dimension.y) {
+            if(!st.render.filenames && stdiff.select < file_infos_length(st.infos)) {
+                if(stdiff.select - stdiff.offset < st.rect_files.dimension.y) {
                     Fx fx = {0};
                     array_push(st.fx, fx);
 
-                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + stdiff.select));
-                    so_fmt(&out, TUI_ESC_CODE_CLEAR_LINE);
+                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + stdiff.select - stdiff.offset));
+                    tui_fmt_clear_line(&out, st.rect_files.dimension.x);
                     File_Info *info = file_infos_get_at(&st.infos, stdiff.select);
                     render_file_info(&out, &st, info);
 
@@ -414,11 +444,11 @@ int main(void) {
                 }
             }
             if(st.select < file_infos_length(st.infos)) {
-                if(st.select < st.rect_files.dimension.y) {
+                if(st.select - st.offset < st.rect_files.dimension.y) {
                     Fx fx = { BG_WT_B FG_BK };
                     array_push(st.fx, fx);
 
-                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + st.select));
+                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + st.select - st.offset));
                     File_Info *info = file_infos_get_at(&st.infos, st.select);
                     render_file_info(&out, &st, info);
 
@@ -442,17 +472,17 @@ int main(void) {
             if(so_is_empty(info->content)) {
                 so_file_read(info->filename, &info->content);
                 info->printable = true;
-            }
-            for(size_t i = 0; i < so_len(info->content); ++i) {
-                unsigned char c = so_at(info->content, i);
-                if(!(c >= ' ' || isspace(c))) {
-                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, 1 + st.rect_preview.anchor.y));
-                    so_fmt(&out, TUI_ESC_CODE_CLEAR_TO_END);
-                    so_clear(&st.tmp);
-                    so_fmt(&st.tmp, F(" %#0x", IT), c);
-                    so_extend_al(&out, st.al.preview, 0, st.tmp);
-                    info->printable = false;
-                    break;
+                for(size_t i = 0; i < so_len(info->content); ++i) {
+                    unsigned char c = so_at(info->content, i);
+                    if(!(c >= ' ' || isspace(c))) {
+                        so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, 1 + st.rect_preview.anchor.y));
+                        so_fmt(&out, TUI_ESC_CODE_CLEAR_TO_END);
+                        so_clear(&st.tmp);
+                        so_fmt(&st.tmp, F(" %#0x", IT), c);
+                        so_extend_al(&out, st.al.preview, 0, st.tmp);
+                        info->printable = false;
+                        break;
+                    }
                 }
             }
             size_t line_nb = 0;
