@@ -1,0 +1,17 @@
+*.out
+*.o
+*.d
+*.txt
+*.vim
+*.swp
+*.tmp
+*.json
+*perf.data*
+*callgrind.out.*
+temp
+build
+*.cache
+*_old
+subprojects/*
+!subprojects/*.wrap
+
