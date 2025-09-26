@@ -439,9 +439,10 @@ int main(void) {
                 so_extend_al(&out, st.al.preview, 0, line);
                 ++line_nb;
             }
-            while(line_nb++ < st.dimension.y) {
+            while(line_nb < st.dimension.y) {
                 so_fmt(&out, TUI_ESC_CODE_GOTO(st.al.split + 1, line_nb + 1));
                 so_fmt(&out, "\e[K");
+                line_nb++;
             }
         }
         /* render - out */
