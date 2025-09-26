@@ -317,7 +317,7 @@ int main(void) {
             so_fmt(&out, TUI_ESC_CODE_GOTO(0, 0));
             fmt_fx_on(&out, st.fx);
             so_clear(&st.tmp);
-            so_fmt(&st.tmp, "%c sdf %c %4u-%02u-%02u %02u:%02u:%02u ", \
+            so_fmt(&st.tmp, "%c gaki %c %4u-%02u-%02u %02u:%02u:%02u ", \
                     loading_set[(i_loading + (sizeof(loading_set)-1)/2) % (sizeof(loading_set)-1)], \
                     loading_set[i_loading % (sizeof(loading_set)-1)], \
                     1900+timeinfo->tm_year, timeinfo->tm_mon, timeinfo->tm_mday,
