@@ -2,6 +2,7 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <time.h>
+#include <ctype.h>
 
 typedef struct Fx {
     unsigned char *col;
@@ -42,6 +43,7 @@ typedef struct Render {
 } Render;
 
 typedef struct File_Info {
+    bool printable;
     So filename;
     So content;
     struct stat stats;
@@ -62,6 +64,7 @@ VEC_IMPLEMENT_SORT(File_Infos, file_infos, File_Info, BY_REF, file_info_cmp);
 
 typedef struct State {
     File_Infos infos;
+    size_t offset;
     size_t select;
     Tui_Point dimension;
     So_Align_Cache alc;
@@ -71,6 +74,8 @@ typedef struct State {
         So_Align header;
         size_t split;
     } al;
+    Tui_Rect rect_files;
+    Tui_Rect rect_preview;
     So tmp;
     Fx *fx;
     Render render;
@@ -101,6 +106,7 @@ int read_dir(So dirname, File_Infos *infos) {
     d = opendir(cdirname);
     if (d) {
         while ((dir = readdir(d)) != NULL) {
+            if(dir->d_name[0] == '.') continue;
             File_Info info = {0};
             info.filename = so_clone(so_l(dir->d_name));
             stat(dir->d_name, &info.stats);
@@ -146,7 +152,7 @@ char *file_info_relcstr(File_Info *info) {
 
 void render_split(So *out, State *st, size_t y) {
     so_fmt(out, TUI_ESC_CODE_GOTO(st->al.split, y));
-    so_extend(out, so(F("|", BG_BK_B FG_YL_B)));
+    so_extend(out, so(F("│", BG_BK_B FG_YL_B)));
 }
 
 void render_file_info(So *out, State *st, File_Info *info) {
@@ -182,6 +188,9 @@ void select_down(State *st) {
     }
 }
 
+void select_at(State *st, size_t n) {
+}
+
 #include <signal.h>
 
 
@@ -204,9 +213,17 @@ void signal_winch(int x) {
     st->dimension.x = w.ws_col;
     st->dimension.y = w.ws_row;
     st->al.split = st->dimension.x / 2;
-    so_al_config(&st->al.filenames, 0, 0, st->al.split, 1, &st->alc);
-    so_al_config(&st->al.preview, 0, 0, st->al.split - 1, 1, &st->alc);
-    so_al_config(&st->al.header, 0, 0, st->dimension.x - 1, 1, &st->alc);
+    st->rect_files = (Tui_Rect){
+        .anchor.x = 0, .anchor.y = 1,
+        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split,
+    };
+    st->rect_preview = (Tui_Rect){
+        .anchor.x = st->al.split + 1, .anchor.y = 1,
+        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split - 1,
+    };
+    so_al_config(&st->al.filenames, 0, 0, st->rect_files.dimension.x, 1, &st->alc);
+    so_al_config(&st->al.preview, 0, 0, st->rect_preview.dimension.x, 1, &st->alc);
+    so_al_config(&st->al.header, 0, 0, st->dimension.x, 1, &st->alc);
     st->render.all = true;
 
     /* patch wave */
@@ -366,12 +383,11 @@ int main(void) {
             file_infos_free(&st.infos);
             read_dir(so("."), &st.infos);
             for(size_t i = 0; i < file_infos_length(st.infos); ++i) {
-                size_t line = 1 + i;
-                if(line < st.dimension.y) {
+                if(i < st.rect_files.dimension.y) {
                     Fx fx = {0};
                     array_push(st.fx, fx);
 
-                    so_fmt(&out, TUI_ESC_CODE_GOTO(0, line));
+                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + i));
                     File_Info *info = file_infos_get_at(&st.infos, i);
                     render_file_info(&out, &st, info);
 
@@ -383,28 +399,26 @@ int main(void) {
         if(st.render.select) {
             st.render.preview = true;
             if(stdiff.select < file_infos_length(st.infos)) {
-                size_t line = 1 + stdiff.select;
-                if(line < st.dimension.y) {
+                if(stdiff.select < st.rect_files.dimension.y) {
                     Fx fx = {0};
                     array_push(st.fx, fx);
 
-                    so_fmt(&out, TUI_ESC_CODE_GOTO(0, line));
+                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + stdiff.select));
                     so_fmt(&out, TUI_ESC_CODE_CLEAR_LINE);
                     File_Info *info = file_infos_get_at(&st.infos, stdiff.select);
                     render_file_info(&out, &st, info);
 
                     array_pop(st.fx);
                     fmt_fx_off(&out);
-                    render_split(&out, &st, line);
+                    render_split(&out, &st, st.rect_files.anchor.y + stdiff.select);
                 }
             }
             if(st.select < file_infos_length(st.infos)) {
-                size_t line = 1 + st.select;
-                if(line < st.dimension.y) {
+                if(st.select < st.rect_files.dimension.y) {
                     Fx fx = { BG_WT_B FG_BK };
                     array_push(st.fx, fx);
 
-                    so_fmt(&out, TUI_ESC_CODE_GOTO(0, line));
+                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + st.select));
                     File_Info *info = file_infos_get_at(&st.infos, st.select);
                     render_file_info(&out, &st, info);
 
@@ -414,34 +428,54 @@ int main(void) {
 
                     array_pop(st.fx);
                     fmt_fx_off(&out);
-                    render_split(&out, &st, line);
+                    render_split(&out, &st, st.rect_files.anchor.y + st.select);
                 }
             }
         }
         if(st.render.split) {
-            for(size_t i = 1; i < st.dimension.y; ++i) {
-                render_split(&out, &st, i);
+            for(size_t i = 0; i < st.rect_files.dimension.y; ++i) {
+                render_split(&out, &st, st.rect_files.anchor.y + i);
             }
         }
         if(st.render.preview) {
             File_Info *info = file_infos_get_at(&st.infos, st.select);
             if(so_is_empty(info->content)) {
                 so_file_read(info->filename, &info->content);
+                info->printable = true;
+            }
+            for(size_t i = 0; i < so_len(info->content); ++i) {
+                unsigned char c = so_at(info->content, i);
+                if(!(c >= ' ' || isspace(c))) {
+                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, 1 + st.rect_preview.anchor.y));
+                    so_fmt(&out, TUI_ESC_CODE_CLEAR_TO_END);
+                    so_clear(&st.tmp);
+                    so_fmt(&st.tmp, F(" %#0x", IT), c);
+                    so_extend_al(&out, st.al.preview, 0, st.tmp);
+                    info->printable = false;
+                    break;
+                }
             }
             size_t line_nb = 0;
-            for(So line = SO; so_splice(info->content, &line, '\n'); ) {
-                if(line_nb + 1 >= st.dimension.y) break;
-                //printff("LINE:%.*s",SO_F(line));
-                if(so_is_zero(line)) continue;
-                so_fmt(&out, TUI_ESC_CODE_GOTO(st.al.split + 1, line_nb + 1));
-                so_fmt(&out, "\e[K");
-                so_al_cache_clear(&st.alc);
-                so_extend_al(&out, st.al.preview, 0, line);
-                ++line_nb;
+            if(info->printable) {
+                for(So line = SO; so_splice(info->content, &line, '\n'); ) {
+                    if(line_nb + st.rect_preview.anchor.y >= st.dimension.y) break;
+                    //printff("LINE:%.*s",SO_F(line));
+                    if(so_is_zero(line)) continue;
+                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, line_nb + st.rect_preview.anchor.y));
+                    so_fmt(&out, TUI_ESC_CODE_CLEAR_TO_END);
+                    so_al_cache_clear(&st.alc);
+                    so_extend_al(&out, st.al.preview, 0, line);
+                    ++line_nb;
+                }
+            } else {
+                so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, st.rect_preview.anchor.y));
+                so_fmt(&out, TUI_ESC_CODE_CLEAR_TO_END);
+                so_extend_al(&out, st.al.preview, 0, so(F("file contains non-printable characters", IT)));
+                line_nb = 2;
             }
-            while(line_nb < st.dimension.y) {
-                so_fmt(&out, TUI_ESC_CODE_GOTO(st.al.split + 1, line_nb + 1));
-                so_fmt(&out, "\e[K");
+            while(line_nb < st.rect_preview.dimension.y) {
+                so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, line_nb + st.rect_preview.anchor.y));
+                so_fmt(&out, TUI_ESC_CODE_CLEAR_TO_END);
                 line_nb++;
             }
         }
