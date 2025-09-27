@@ -118,6 +118,7 @@ typedef struct State {
 typedef struct Context {
     struct timespec refresh;
     Tui_Input input;
+    Tui_Input input_prev;
     pthread_cond_t cond;
     State st_ext;
     bool do_ext;
@@ -255,6 +256,31 @@ void state_global_set(Context *st) {
     state_global = st;
 }
 
+void state_apply_split(State *st) {
+#if 1
+    st->rect_preview = (Tui_Rect){
+        .anchor.x = 0, .anchor.y = 1,
+        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split,
+    };
+    st->rect_files = (Tui_Rect){
+        .anchor.x = st->al.split + 1, .anchor.y = 1,
+        .dimension.y = st->dimension.y - 1, .dimension.x = st->dimension.x - st->al.split - 1,
+    };
+#else
+    st->rect_files = (Tui_Rect){
+        .anchor.x = 0, .anchor.y = 1,
+        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split,
+    };
+    st->rect_preview = (Tui_Rect){
+        .anchor.x = st->al.split + 1, .anchor.y = 1,
+        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split - 1,
+    };
+#endif
+    so_al_config(&st->al.filenames, 0, 0, st->rect_files.dimension.x, 1, st->alc);
+    so_al_config(&st->al.preview, 0, 0, st->rect_preview.dimension.x, 1, st->alc);
+    so_al_config(&st->al.header, 0, 0, st->dimension.x, 1, st->alc);
+}
+
 void signal_winch(int x) {
 
     Context *ctx = state_global_get();
@@ -270,28 +296,7 @@ void signal_winch(int x) {
     st->dimension.x = w.ws_col;
     st->dimension.y = w.ws_row;
     st->al.split = st->dimension.x / 2;
-#if 1
-    st->rect_preview = (Tui_Rect){
-        .anchor.x = 0, .anchor.y = 1,
-        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split,
-    };
-    st->rect_files = (Tui_Rect){
-        .anchor.x = st->al.split + 1, .anchor.y = 1,
-        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split - 1,
-    };
-#else
-    st->rect_files = (Tui_Rect){
-        .anchor.x = 0, .anchor.y = 1,
-        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split,
-    };
-    st->rect_preview = (Tui_Rect){
-        .anchor.x = st->al.split + 1, .anchor.y = 1,
-        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split - 1,
-    };
-#endif
-    so_al_config(&st->al.filenames, 0, 0, st->rect_files.dimension.x, 1, st->alc);
-    so_al_config(&st->al.preview, 0, 0, st->rect_preview.dimension.x, 1, st->alc);
-    so_al_config(&st->al.header, 0, 0, st->dimension.x, 1, st->alc);
+    state_apply_split(st);
     st->render.all = true;
 
     /* patch selection */
@@ -313,7 +318,9 @@ void signal_winch(int x) {
 void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
     Context *ctx = void_ctx;
     State *st = &ctx->st_ext;
+    bool resize_split = false;
     for(;;) {
+        ctx->input_prev = ctx->input;
         //printff("getting input..\r");
         if(st->quit) break;
         if(tui_input_process(&ctx->input)) {
@@ -365,7 +372,7 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                     st->render.select = true;
                     select_up(st);
                 }
-                if(ctx->input.mouse.l || ctx->input.mouse.m || ctx->input.mouse.r) {
+                if(ctx->input.mouse.l || ctx->input.mouse.m) {
                     if(ctx->input.mouse.pos.y >= st->rect_files.anchor.y &&
                        ctx->input.mouse.pos.y < st->rect_files.anchor.y + st->rect_files.dimension.y)
                     {
@@ -373,6 +380,20 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                         if(y < file_infos_length(st->infos)) st->select = y;
                         st->render.select = true;
                     }
+                }
+                if(ctx->input.mouse.r) {
+                    if(!ctx->input_prev.mouse.r) {
+                        if(ctx->input.mouse.pos.x == st->al.split) {
+                            resize_split = true;
+                        }
+                    }
+                    if(resize_split) {
+                        st->al.split = ctx->input.mouse.pos.x;
+                        state_apply_split(st);
+                        st->render.all = true;
+                    }
+                } else {
+                    resize_split = false;
                 }
             }
             pthread_cond_signal(&ctx->cond);
@@ -530,11 +551,6 @@ int main(void) {
                 for(size_t i = 0; i < so_len(info->content); ++i) {
                     unsigned char c = so_at(info->content, i);
                     if(!(c >= ' ' || isspace(c))) {
-                        so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, 1 + st.rect_preview.anchor.y));
-                        tui_fmt_clear_line(&out, st.rect_preview.dimension.x);
-                        so_clear(&st.tmp);
-                        so_fmt(&st.tmp, F(" %#0x", IT), c);
-                        so_extend_al(&out, st.al.preview, 0, st.tmp);
                         info->printable = false;
                         break;
                     }
@@ -555,13 +571,14 @@ int main(void) {
             } else {
                 so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, st.rect_preview.anchor.y));
                 tui_fmt_clear_line(&out, st.rect_preview.dimension.x);
+                so_al_cache_clear(st.alc);
                 so_extend_al(&out, st.al.preview, 0, so(F("file contains non-printable characters", IT)));
-                line_nb = 2;
+                ++line_nb;
             }
             while(line_nb < st.rect_preview.dimension.y) {
                 so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, line_nb + st.rect_preview.anchor.y));
                 tui_fmt_clear_line(&out, st.rect_preview.dimension.x);
-                line_nb++;
+                ++line_nb;
             }
         }
         if(!ctx.do_ext) {
