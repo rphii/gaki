@@ -366,9 +366,13 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                     select_up(st);
                 }
                 if(ctx->input.mouse.l || ctx->input.mouse.m || ctx->input.mouse.r) {
-                    size_t y = ctx->input.mouse.pos.y - st->rect_files.anchor.y + st->offset;
-                    if(y < file_infos_length(st->infos)) st->select = y;
-                    st->render.select = true;
+                    if(ctx->input.mouse.pos.y >= st->rect_files.anchor.y &&
+                       ctx->input.mouse.pos.y < st->rect_files.anchor.y + st->rect_files.dimension.y)
+                    {
+                        size_t y = ctx->input.mouse.pos.y - st->rect_files.anchor.y + st->offset;
+                        if(y < file_infos_length(st->infos)) st->select = y;
+                        st->render.select = true;
+                    }
                 }
             }
             pthread_cond_signal(&ctx->cond);
