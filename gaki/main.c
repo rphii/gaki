@@ -82,6 +82,7 @@ int file_info_cmp(File_Info *a, File_Info *b) {
 
 void file_info_free(File_Info *a) {
     so_free(&a->filename);
+    so_free(&a->content);
 }
 
 VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, BASE);
@@ -89,8 +90,14 @@ VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, SORT);
 VEC_IMPLEMENT_BASE(File_Infos, file_infos, File_Info, BY_REF, file_info_free);
 VEC_IMPLEMENT_SORT(File_Infos, file_infos, File_Info, BY_REF, file_info_cmp);
 
-typedef struct State {
+typedef struct State_Dynamic {
     File_Infos infos;
+    So tmp;
+    Fx *fx;
+} State_Dynamic;
+
+typedef struct State {
+    State_Dynamic *dyn;
     So_Align_Cache *alc;
     size_t offset;
     size_t select;
@@ -103,8 +110,6 @@ typedef struct State {
     } al;
     Tui_Rect rect_files;
     Tui_Rect rect_preview;
-    So tmp;
-    Fx *fx;
     Render render;
     size_t wave_left;
     size_t wave_right;
@@ -196,26 +201,26 @@ void render_split(So *out, State *st, size_t y) {
 }
 
 void render_file_info(So *out, State *st, File_Info *info) {
-    so_clear(&st->tmp);
+    so_clear(&st->dyn->tmp);
 
     Fx fx = (Fx){ IT FG_CY };
-    array_push(st->fx, fx);
-    fmt_fx_on(&st->tmp, st->fx);
-    so_fmt(&st->tmp, "%3.0f %-3s", file_info_relsize(info), file_info_relcstr(info));
-    array_pop(st->fx);
+    array_push(st->dyn->fx, fx);
+    fmt_fx_on(&st->dyn->tmp, st->dyn->fx);
+    so_fmt(&st->dyn->tmp, "%3.0f %-3s", file_info_relsize(info), file_info_relcstr(info));
+    array_pop(st->dyn->fx);
 
-    fmt_fx_on(&st->tmp, st->fx);
-    so_fmt(&st->tmp, " %.*s ", SO_F(info->filename));
+    fmt_fx_on(&st->dyn->tmp, st->dyn->fx);
+    so_fmt(&st->dyn->tmp, " %.*s ", SO_F(info->filename));
 
-    fmt_fx_on(&st->tmp, st->fx);
+    fmt_fx_on(&st->dyn->tmp, st->dyn->fx);
 
     so_al_cache_clear(st->alc);
-    so_extend_al(out, st->al.filenames, 0, st->tmp);
+    so_extend_al(out, st->al.filenames, 0, st->dyn->tmp);
 }
 
 void select_up(State *st) {
     if(!st->select) {
-        st->select = file_infos_length(st->infos) - 1;
+        st->select = file_infos_length(st->dyn->infos) - 1;
         st->offset = st->select + 1 > st->rect_files.dimension.y ? st->select + 1 - st->rect_files.dimension.y : 0;
         if(st->offset) st->render.filenames = true;
     } else {
@@ -229,7 +234,7 @@ void select_up(State *st) {
 
 void select_down(State *st) {
     ++st->select;
-    if(st->select >= file_infos_length(st->infos)) {
+    if(st->select >= file_infos_length(st->dyn->infos)) {
         st->select = 0;
         if(st->offset) st->render.filenames = true;
         st->offset = 0;
@@ -346,7 +351,7 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                               break;
                     case 'G': 
                               st->render.select = true;
-                              st->select = file_infos_length(st->infos) - 1;
+                              st->select = file_infos_length(st->dyn->infos) - 1;
                               st->offset = st->select + 1 > st->rect_files.dimension.y ? st->select + 1 - st->rect_files.dimension.y : 0;
                               if(st->offset) st->render.filenames = true;
                               break;
@@ -377,7 +382,7 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                        ctx->input.mouse.pos.y < st->rect_files.anchor.y + st->rect_files.dimension.y)
                     {
                         size_t y = ctx->input.mouse.pos.y - st->rect_files.anchor.y + st->offset;
-                        if(y < file_infos_length(st->infos)) st->select = y;
+                        if(y < file_infos_length(st->dyn->infos)) st->select = y;
                         st->render.select = true;
                     }
                 }
@@ -402,6 +407,13 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
     return 0;
 }
 
+void context_free(Context *ctx) {
+    so_free(&ctx->st_ext.dyn->tmp);
+    file_infos_free(&ctx->st_ext.dyn->infos);
+    array_free(ctx->st_ext.dyn->fx);
+    pw_free(&ctx->pw);
+}
+
 int main(void) {
 
     tui_enter();
@@ -410,6 +422,8 @@ int main(void) {
 
     So out = SO;
     Context ctx = {0};
+    ctx.st_ext.dyn = malloc(sizeof(*ctx.st_ext.dyn));
+    memset(ctx.st_ext.dyn, 0, sizeof(*ctx.st_ext.dyn));
     ctx.refresh.tv_nsec = 1e6;
     state_global_set(&ctx);
     signal_winch(0);
@@ -423,7 +437,6 @@ int main(void) {
 
     for(;;) {
         State st = ctx.st_ext;
-        ctx.do_ext = false;
         if(st.quit) break;
         /* render - prepare */
         so_clear(&out);
@@ -443,17 +456,17 @@ int main(void) {
             size_t i_loading = (size_t)((st.t.tv_sec + (double)st.t.tv_usec * 1e-6) * 10);
 
             Fx fx = (Fx){ BOLD BG_BK_B FG_YL_B };
-            array_push(st.fx, fx);
+            array_push(st.dyn->fx, fx);
             so_fmt(&out, TUI_ESC_CODE_GOTO(0, 0));
-            fmt_fx_on(&out, st.fx);
-            so_clear(&st.tmp);
-            so_fmt(&st.tmp, "%c gaki %c %4u-%02u-%02u %02u:%02u:%02u ", \
+            fmt_fx_on(&out, st.dyn->fx);
+            so_clear(&st.dyn->tmp);
+            so_fmt(&st.dyn->tmp, "%c gaki %c %4u-%02u-%02u %02u:%02u:%02u ", \
                     loading_set[(i_loading + (sizeof(loading_set)-1)/2) % (sizeof(loading_set)-1)], \
                     loading_set[i_loading % (sizeof(loading_set)-1)], \
                     1900+timeinfo->tm_year, timeinfo->tm_mon, timeinfo->tm_mday,
                     timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec
                     );
-            so_extend_al(&out, st.al.header, 0, st.tmp);
+            so_extend_al(&out, st.al.header, 0, st.dyn->tmp);
 
             st.wave_width = st.dimension.x > ctx.alc.progress ? st.dimension.x - ctx.alc.progress : 0;
             double delta = timeval_d(st.t) - timeval_d(stdiff.t);
@@ -490,49 +503,49 @@ int main(void) {
                 }
             }
             fmt_fx_off(&out);
-            array_pop(st.fx);
+            array_pop(st.dyn->fx);
         }
         if(st.render.filenames) {
-            if(!file_infos_length(st.infos)) {
-                file_infos_free(&st.infos);
-                read_dir(so("."), &st.infos);
+            if(!file_infos_length(st.dyn->infos)) {
+                file_infos_free(&st.dyn->infos);
+                read_dir(so("."), &st.dyn->infos);
             }
-            for(size_t i = st.offset; i < file_infos_length(st.infos); ++i) {
+            for(size_t i = st.offset; i < file_infos_length(st.dyn->infos); ++i) {
                 if(i - st.offset < st.rect_files.dimension.y) {
                     so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + i - st.offset));
                     tui_fmt_clear_line(&out, st.rect_files.dimension.x);
-                    File_Info *info = file_infos_get_at(&st.infos, i);
-                    so_clear(&st.tmp);
-                    so_extend_al(&out, st.al.filenames, 0, st.tmp);
+                    File_Info *info = file_infos_get_at(&st.dyn->infos, i);
+                    so_clear(&st.dyn->tmp);
+                    so_extend_al(&out, st.al.filenames, 0, st.dyn->tmp);
                     render_file_info(&out, &st, info);
                 }
             }
         }
         if(st.render.select) {
             st.render.preview = true;
-            if(!st.render.filenames && stdiff.select < file_infos_length(st.infos)) {
+            if(!st.render.filenames && stdiff.select < file_infos_length(st.dyn->infos)) {
                 if(stdiff.select - stdiff.offset < st.rect_files.dimension.y) {
                     so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + stdiff.select - stdiff.offset));
                     tui_fmt_clear_line(&out, st.rect_files.dimension.x);
-                    File_Info *info = file_infos_get_at(&st.infos, stdiff.select);
+                    File_Info *info = file_infos_get_at(&st.dyn->infos, stdiff.select);
                     render_file_info(&out, &st, info);
                     render_split(&out, &st, st.rect_files.anchor.y + stdiff.select);
                 }
             }
-            if(st.select < file_infos_length(st.infos)) {
+            if(st.select < file_infos_length(st.dyn->infos)) {
                 if(st.select - st.offset < st.rect_files.dimension.y) {
                     Fx fx = { BG_WT_B FG_BK };
-                    array_push(st.fx, fx);
+                    array_push(st.dyn->fx, fx);
 
                     so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + st.select - st.offset));
-                    File_Info *info = file_infos_get_at(&st.infos, st.select);
+                    File_Info *info = file_infos_get_at(&st.dyn->infos, st.select);
                     render_file_info(&out, &st, info);
 
                     for(size_t i = 0; i < st.dimension.x; ++i) {
                         so_extend_al(&out, st.al.filenames, 0, so(" "));
                     }
 
-                    array_pop(st.fx);
+                    array_pop(st.dyn->fx);
                     fmt_fx_off(&out);
                     render_split(&out, &st, st.rect_files.anchor.y + st.select);
                 }
@@ -544,7 +557,7 @@ int main(void) {
             }
         }
         if(st.render.preview) {
-            File_Info *info = file_infos_get_at(&st.infos, st.select);
+            File_Info *info = file_infos_get_at(&st.dyn->infos, st.select);
             if(so_is_empty(info->content)) {
                 so_file_read(info->filename, &info->content);
                 info->printable = true;
@@ -589,15 +602,18 @@ int main(void) {
             st.render = (Render){0};
             st.render.spinner = true;
             ctx.st_ext = st;
+            pthread_cond_wait(&ctx.cond, &ctx.mtx);
         }
+        ctx.do_ext = false;
 
         //struct timeval now;
         //gettimeofday(&now,NULL);
         //struct timespec until = timespec_add_timeval(ctx.refresh, now);
         //pthread_cond_timedwait(&ctx.cond, &ctx.mtx, &until);
-        pthread_cond_wait(&ctx.cond, &ctx.mtx);
     }
 
+    context_free(&ctx);
+    so_free(&out);
     tui_exit();
     return 0;
 }
