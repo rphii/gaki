@@ -190,7 +190,8 @@ char *file_info_relcstr(File_Info *info) {
 
 void render_split(So *out, State *st, size_t y) {
     so_fmt(out, TUI_ESC_CODE_GOTO(st->al.split, y));
-    so_extend(out, so(F("│", BG_BK_B FG_YL_B)));
+    //so_extend(out, so(F("│", BG_BK_B FG_YL_B)));
+    so_extend(out, so("│"));
 }
 
 void render_file_info(So *out, State *st, File_Info *info) {
@@ -269,6 +270,16 @@ void signal_winch(int x) {
     st->dimension.x = w.ws_col;
     st->dimension.y = w.ws_row;
     st->al.split = st->dimension.x / 2;
+#if 1
+    st->rect_preview = (Tui_Rect){
+        .anchor.x = 0, .anchor.y = 1,
+        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split,
+    };
+    st->rect_files = (Tui_Rect){
+        .anchor.x = st->al.split + 1, .anchor.y = 1,
+        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split - 1,
+    };
+#else
     st->rect_files = (Tui_Rect){
         .anchor.x = 0, .anchor.y = 1,
         .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split,
@@ -277,6 +288,7 @@ void signal_winch(int x) {
         .anchor.x = st->al.split + 1, .anchor.y = 1,
         .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split - 1,
     };
+#endif
     so_al_config(&st->al.filenames, 0, 0, st->rect_files.dimension.x, 1, st->alc);
     so_al_config(&st->al.preview, 0, 0, st->rect_preview.dimension.x, 1, st->alc);
     so_al_config(&st->al.header, 0, 0, st->dimension.x, 1, st->alc);
@@ -515,7 +527,7 @@ int main(void) {
                     unsigned char c = so_at(info->content, i);
                     if(!(c >= ' ' || isspace(c))) {
                         so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, 1 + st.rect_preview.anchor.y));
-                        so_fmt(&out, TUI_ESC_CODE_CLEAR_TO_END);
+                        tui_fmt_clear_line(&out, st.rect_preview.dimension.x);
                         so_clear(&st.tmp);
                         so_fmt(&st.tmp, F(" %#0x", IT), c);
                         so_extend_al(&out, st.al.preview, 0, st.tmp);
@@ -531,20 +543,20 @@ int main(void) {
                     //printff("LINE:%.*s",SO_F(line));
                     if(so_is_zero(line)) continue;
                     so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, line_nb + st.rect_preview.anchor.y));
-                    so_fmt(&out, TUI_ESC_CODE_CLEAR_TO_END);
+                    tui_fmt_clear_line(&out, st.rect_preview.dimension.x);
                     so_al_cache_clear(st.alc);
                     so_extend_al(&out, st.al.preview, 0, line);
                     ++line_nb;
                 }
             } else {
                 so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, st.rect_preview.anchor.y));
-                so_fmt(&out, TUI_ESC_CODE_CLEAR_TO_END);
+                tui_fmt_clear_line(&out, st.rect_preview.dimension.x);
                 so_extend_al(&out, st.al.preview, 0, so(F("file contains non-printable characters", IT)));
                 line_nb = 2;
             }
             while(line_nb < st.rect_preview.dimension.y) {
                 so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, line_nb + st.rect_preview.anchor.y));
-                so_fmt(&out, TUI_ESC_CODE_CLEAR_TO_END);
+                tui_fmt_clear_line(&out, st.rect_preview.dimension.x);
                 line_nb++;
             }
         }
