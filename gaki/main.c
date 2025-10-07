@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <pthread.h> 
 #include <rlpw.h> 
+#include <rlwcwidth.h>
 
 void tui_fmt_clear_line(So *out, size_t n) {
     if(n) {
@@ -119,6 +120,17 @@ typedef struct State {
     double t_delta_wave;
     bool quit;
 } State;
+
+typedef struct Context2 {
+    Tui_Input input;
+    Tui_Input input_prev;
+    Tui_Screen screen;
+    pthread_cond_t cond;
+    pthread_mutex_t mtx;
+    Pw pw;
+    bool resized;
+    bool quit;
+} Context2;
 
 typedef struct Context {
     struct timespec refresh;
@@ -251,13 +263,13 @@ void select_at(State *st, size_t n) {
 #include <signal.h>
 
 
-static Context *state_global;
+static Context2 *state_global;
 
-Context *state_global_get(void) {
+Context2 *state_global_get(void) {
     return state_global;
 }
 
-void state_global_set(Context *st) {
+void state_global_set(Context2 *st) {
     state_global = st;
 }
 
@@ -288,114 +300,57 @@ void state_apply_split(State *st) {
 
 void signal_winch(int x) {
 
-    Context *ctx = state_global_get();
-
-    struct winsize w;
-    ioctl(0, TIOCGWINSZ, &w);
-
-    State *st = &ctx->st_ext;
-    st->alc = &ctx->alc;
-    State stdiff = ctx->st_ext;
-
-    gettimeofday(&st->t, NULL);
-    st->dimension.x = w.ws_col;
-    st->dimension.y = w.ws_row;
-    st->al.split = st->dimension.x / 2;
-    state_apply_split(st);
-    st->render.all = true;
-
-    /* patch selection */
-    if(st->select + 1 >= st->offset + st->rect_files.dimension.y) {
-        st->offset = st->select + 1 > st->rect_files.dimension.y ? st->select + 1 - st->rect_files.dimension.y : 0;
-    }
-
-    /* patch wave */
-    if(stdiff.wave_width) {
-        size_t wave_diff = st->dimension.x - stdiff.dimension.x;
-        st->wave_left = 0;
-        st->wave_right = 0;
-    }
-
-    ctx->do_ext = true;
+    Context2 *ctx = state_global_get();
+    ctx->resized = true;
     pthread_cond_signal(&ctx->cond);
 }
 
+void handle_resize(Context2 *ctx) {
+    if(!ctx->resized) return;
+    ctx->resized = false;
+    
+    struct winsize w;
+    ioctl(0, TIOCGWINSZ, &w);
+
+    Tui_Point dimension = {
+        .x = w.ws_col,
+        .y = w.ws_row,
+    };
+
+    tui_screen_resize(&ctx->screen, dimension);
+}
+
 void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
-    Context *ctx = void_ctx;
-    State *st = &ctx->st_ext;
+    Context2 *ctx = void_ctx;
     bool resize_split = false;
     for(;;) {
         ctx->input_prev = ctx->input;
         //printff("getting input..\r");
-        if(st->quit) break;
+        if(ctx->quit) break;
         if(tui_input_process(&ctx->input)) {
             if(ctx->input.id == INPUT_TEXT && ctx->input.text.len == 1) {
                 switch(ctx->input.text.str[0]) {
-                    case 'q': st->quit = true; break;
-                    case 'r': 
-                              st->render.all = true;
-                              break;
-                    case 'j':
-                              st->render.select = true;
-                              select_down(st);
-                              break;
-                    case 'k':
-                              st->render.select = true;
-                              select_up(st);
-                              break;
-                    case 'g': 
-                              st->render.select = true;
-                              st->select = 0;
-                              if(st->offset) st->render.filenames = true;
-                              st->offset = 0;
-                              break;
-                    case 'G': 
-                              st->render.select = true;
-                              st->select = file_infos_length(st->dyn->infos) - 1;
-                              st->offset = st->select + 1 > st->rect_files.dimension.y ? st->select + 1 - st->rect_files.dimension.y : 0;
-                              if(st->offset) st->render.filenames = true;
-                              break;
+                    case 'q': ctx->quit = true; break;
                     default:
                               break;
                 }
             }
             if(ctx->input.id == INPUT_KEY) {
                 if(ctx->input.key == KEY_UP) {
-                    st->render.select = true;
-                    select_up(st);
                 }
                 if(ctx->input.key == KEY_DOWN) {
-                    st->render.select = true;
-                    select_down(st);
                 }
             }
             if(ctx->input.id == INPUT_MOUSE) {
                 if(ctx->input.mouse.scroll > 0) {
-                    st->render.select = true;
-                    select_down(st);
                 } else if(ctx->input.mouse.scroll < 0) {
-                    st->render.select = true;
-                    select_up(st);
                 }
                 if(ctx->input.mouse.l || ctx->input.mouse.m) {
-                    if(ctx->input.mouse.pos.y >= st->rect_files.anchor.y &&
-                       ctx->input.mouse.pos.y < st->rect_files.anchor.y + st->rect_files.dimension.y)
-                    {
-                        size_t y = ctx->input.mouse.pos.y - st->rect_files.anchor.y + st->offset;
-                        if(y < file_infos_length(st->dyn->infos)) st->select = y;
-                        st->render.select = true;
-                    }
                 }
                 if(ctx->input.mouse.r) {
                     if(!ctx->input_prev.mouse.r) {
-                        if(ctx->input.mouse.pos.x == st->al.split) {
-                            resize_split = true;
-                        }
                     }
                     if(resize_split) {
-                        st->al.split = ctx->input.mouse.pos.x;
-                        state_apply_split(st);
-                        st->render.all = true;
                     }
                 } else {
                     resize_split = false;
@@ -414,27 +369,69 @@ void context_free(Context *ctx) {
     pw_free(&ctx->pw);
 }
 
+static unsigned int g_seed;
+
+// Used to seed the generator.           
+inline void fast_srand(int seed) {
+    g_seed = seed;
+}
+
+// Compute a pseudorandom integer.
+// Output value in range [0, 32767]
+inline int fast_rand(void) {
+    g_seed = (214013*g_seed+2531011);
+    return (g_seed>>16)&0x7FFF;
+}
+int fast_rand(void);
+
+void render(Context2 *ctx) {
+    Tui_Rect rc = {
+        .anc = (Tui_Point){ .x = 2, .y = 1 },
+        .dim = (Tui_Point){ .x = ctx->screen.dimension.x - 8, .y = ctx->screen.dimension.y - 4 },
+        //.dim = (Tui_Point){ .x = 1, .y = 1 }
+    };
+    Tui_Point pt;
+    Tui_Rect cnv = { .dim = ctx->screen.dimension };
+    --cnv.dim.x;
+    --cnv.dim.y;
+    for(pt.y = rc.anc.y; pt.y < rc.anc.y + rc.dim.y; ++pt.y) {
+        for(pt.x = rc.anc.x; pt.x < rc.anc.x + rc.dim.x; ++pt.x) {
+            if(!tui_rect_contains_point(cnv, pt)) continue;
+            //printff("\rRENDER %u,%u", pt.x,pt.y);
+            Tui_Cell *cell = tui_buffer_at(&ctx->screen.now, pt);
+            cell->ucp.val = fast_rand() % ('z'-'A') + 'A';
+        }
+    }
+}
+
 int main(void) {
 
     tui_enter();
 
-    char loading_set[] = "-<([|])>->)]|[(<";
-
     So out = SO;
-    Context ctx = {0};
-    ctx.st_ext.dyn = malloc(sizeof(*ctx.st_ext.dyn));
-    memset(ctx.st_ext.dyn, 0, sizeof(*ctx.st_ext.dyn));
-    ctx.refresh.tv_nsec = 1e6;
+    Context2 ctx = { .resized = true };
+
     state_global_set(&ctx);
-    signal_winch(0);
+
     signal(SIGWINCH, signal_winch);
 
     pw_init(&ctx.pw, 1);
     pw_queue(&ctx.pw, pw_queue_process_input, &ctx);
     pw_dispatch(&ctx.pw);
 
-    State stdiff = ctx.st_ext;
-
+#if 1
+    for(;;) {
+        if(ctx.quit) break;
+        handle_resize(&ctx);
+        render(&ctx);
+        so_clear(&out);
+        tui_screen_fmt(&out, &ctx.screen);
+        //printf("\r");
+        //so_printdbg(out);
+        tui_write_so(out);
+        pthread_cond_wait(&ctx.cond, &ctx.mtx);
+    }
+#else
     for(;;) {
         State st = ctx.st_ext;
         if(st.quit) break;
@@ -613,6 +610,8 @@ int main(void) {
     }
 
     context_free(&ctx);
+#endif
+
     so_free(&out);
     tui_exit();
     return 0;
