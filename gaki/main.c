@@ -301,11 +301,13 @@ void state_apply_split(State *st) {
 void signal_winch(int x) {
 
     Context2 *ctx = state_global_get();
+    pthread_mutex_lock(&ctx->mtx);
     ctx->resized = true;
+    pthread_mutex_unlock(&ctx->mtx);
     pthread_cond_signal(&ctx->cond);
 }
 
-void handle_resize(Context2 *ctx) {
+void handle_resize(So *out, Context2 *ctx) {
     if(!ctx->resized) return;
     ctx->resized = false;
     
@@ -318,6 +320,7 @@ void handle_resize(Context2 *ctx) {
     };
 
     tui_screen_resize(&ctx->screen, dimension);
+    so_fmt(out, TUI_ESC_CODE_CLEAR);
 }
 
 void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
@@ -372,6 +375,7 @@ void context_free(Context *ctx) {
 static unsigned int g_seed;
 
 // Used to seed the generator.           
+void fast_srand(int seed);
 inline void fast_srand(int seed) {
     g_seed = seed;
 }
@@ -386,10 +390,48 @@ int fast_rand(void);
 
 void render(Context2 *ctx) {
     Tui_Rect rc = {
-        .anc = (Tui_Point){ .x = 2, .y = 1 },
-        .dim = (Tui_Point){ .x = ctx->screen.dimension.x - 8, .y = ctx->screen.dimension.y - 4 },
+        .anc = (Tui_Point){ .x = 0, .y = 0 },
+        .dim = (Tui_Point){ .x = ctx->screen.dimension.x, .y = ctx->screen.dimension.y },
+        //.dim = (Tui_Point){ .x = 1, .y = 1 },
         //.dim = (Tui_Point){ .x = 1, .y = 1 }
     };
+    So tmp = SO;
+    for(size_t i = 0; i < ctx->screen.dimension.y; ++i) {
+        for(size_t j = 0; j < ctx->screen.dimension.x; ++j) {
+            so_extend(&tmp, so("⢕"));
+        }
+        so_extend(&tmp, so("\n"));
+    }
+    tui_screen_draw(&ctx->screen, rc, 0, &(Tui_Color){ .r = 0x88, .type = TUI_COLOR_RGB }, &(Tui_Fx){ .bold = true }, tmp);
+    int x = fast_rand();
+    Tui_Color fg = (Tui_Color){ .type = TUI_COLOR_RGB, .g = x, .b = x >> 1, .r = x >> 2 };
+    Tui_Color bg = (Tui_Color){ .type = TUI_COLOR_RGB, .g = x >> 5, .b = x >> 4, .r = x >> 3 };
+    Tui_Fx fx = (Tui_Fx){ .bold = (x>>1)%2, .it = (x>>4)%2, .ul = (x>>6)%2 };
+    so_clear(&tmp);
+    for(size_t j = 1; j < ctx->screen.dimension.y - 1; ++j) {
+    //for(size_t j = 0; j < 1; ++j) {
+        for(size_t i = 2; i < ctx->screen.dimension.x - 2; ++i) {
+            rc.anc.y = j;
+            rc.anc.x = i;
+            rc.dim.x = ctx->screen.dimension.x - i - 1;
+            if(j && fast_rand() % 2 == 0) {
+                so_extend(&tmp, so("🎄"));
+                ++i;
+            }
+            else {
+                so_push(&tmp, fast_rand() % ('z'-'A') + 'A');
+                //so_push(&tmp, ' ');
+            }
+            x = fast_rand();
+    //Tui_Color fg = (Tui_Color){ .type = TUI_COLOR_RGB, .g = x, .b = x >> 1, .r = x >> 2 };
+    //Tui_Color bg = (Tui_Color){ .type = TUI_COLOR_RGB, .g = x >> 5, .b = x >> 4, .r = x >> 3 };
+    //Tui_Fx fx = (Tui_Fx){ .bold = (x>>1)%2, .it = (x>>4)%2, .ul = (x>>6)%2 };
+            tui_screen_draw(&ctx->screen, rc, &fg, &bg, &fx, tmp);
+            so_clear(&tmp);
+        }
+    }
+    so_free(&tmp);
+#if 0
     Tui_Point pt;
     Tui_Rect cnv = { .dim = ctx->screen.dimension };
     --cnv.dim.x;
@@ -402,6 +444,7 @@ void render(Context2 *ctx) {
             cell->ucp.val = fast_rand() % ('z'-'A') + 'A';
         }
     }
+#endif
 }
 
 int main(void) {
@@ -419,17 +462,27 @@ int main(void) {
     pw_queue(&ctx.pw, pw_queue_process_input, &ctx);
     pw_dispatch(&ctx.pw);
 
+    fast_srand(time(0));
+
 #if 1
+    //for(size_t i = 0; i < 1000; ++i) {
     for(;;) {
         if(ctx.quit) break;
-        handle_resize(&ctx);
-        render(&ctx);
         so_clear(&out);
+        handle_resize(&out, &ctx);
+        render(&ctx);
         tui_screen_fmt(&out, &ctx.screen);
         //printf("\r");
         //so_printdbg(out);
         tui_write_so(out);
-        pthread_cond_wait(&ctx.cond, &ctx.mtx);
+
+#if 1
+        pthread_mutex_lock(&ctx.mtx);
+        if(!ctx.resized) {
+            pthread_cond_wait(&ctx.cond, &ctx.mtx);
+        }
+        pthread_mutex_unlock(&ctx.mtx);
+#endif
     }
 #else
     for(;;) {
