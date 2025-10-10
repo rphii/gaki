@@ -6,6 +6,7 @@
 #include <pthread.h> 
 #include <rlpw.h> 
 #include <rlwcwidth.h>
+#include <errno.h>
 
 void tui_fmt_clear_line(So *out, size_t n) {
     if(n) {
@@ -73,8 +74,13 @@ typedef struct Render {
 typedef struct File_Info {
     bool printable;
     So filename;
-    So content;
+    So path;
+    union {
+        So content;
+        struct File_Infos *file_infos;
+    };
     struct stat stats;
+    bool selected;
 } File_Info;
 
 int file_info_cmp(File_Info *a, File_Info *b) {
@@ -91,45 +97,59 @@ VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, SORT);
 VEC_IMPLEMENT_BASE(File_Infos, file_infos, File_Info, BY_REF, file_info_free);
 VEC_IMPLEMENT_SORT(File_Infos, file_infos, File_Info, BY_REF, file_info_cmp);
 
+LUT_INCLUDE(T_File_Infos, t_file_infos, So, BY_REF, File_Infos, BY_REF);
+LUT_IMPLEMENT(T_File_Infos, t_file_infos, So, BY_REF, File_Infos, BY_REF, so_hash_p, so_cmp_p, 0, file_infos_free);
+
 typedef struct State_Dynamic {
     File_Infos infos;
     So tmp;
     Fx *fx;
 } State_Dynamic;
 
+typedef struct Action {
+    ssize_t select_up;
+    ssize_t select_down;
+    ssize_t select_left;
+    ssize_t select_right;
+} Action;
+
 typedef struct State {
-    State_Dynamic *dyn;
-    So_Align_Cache *alc;
-    size_t offset;
     size_t select;
-    Tui_Point dimension;
-    struct {
-        So_Align filenames;
-        So_Align preview;
-        So_Align header;
-        size_t split;
-    } al;
-    Tui_Rect rect_files;
-    Tui_Rect rect_preview;
-    Render render;
-    size_t wave_left;
-    size_t wave_right;
-    size_t wave_width;
-    bool wave_reverse;
-    struct timeval t;
-    double t_delta_wave;
-    bool quit;
+    size_t offset;
+    So tmp;
+    So pwd;
+    Tui_Rect rc_files;
+    Tui_Rect rc_split;
+    Tui_Rect rc_preview;
+    Tui_Rect rc_pwd;
+    File_Infos *file_infos;
+    T_File_Infos t_file_infos;
 } State;
 
 typedef struct Context2 {
+    struct timespec t0;
+    struct timespec tE;
     Tui_Input input;
     Tui_Input input_prev;
     Tui_Screen screen;
+    Tui_Buffer buffer;
     pthread_cond_t cond;
     pthread_mutex_t mtx;
     Pw pw;
+    Pw pw_render;
+    char *setbuf;
     bool resized;
     bool quit;
+    bool drag;
+    State st;
+    Action ac;
+
+    pthread_cond_t render_cond;
+    pthread_mutex_t render_mtx;
+    bool render_do;
+    bool render_busy;
+    size_t frames;
+
 } Context2;
 
 typedef struct Context {
@@ -159,20 +179,34 @@ int read_dir(So dirname, File_Infos *infos) {
     DIR *d;
     struct dirent *dir;
     char *cdirname = so_dup(dirname);
+    char *cfilename = 0;
     d = opendir(cdirname);
     if (d) {
         while ((dir = readdir(d)) != NULL) {
             if(dir->d_name[0] == '.') continue;
             File_Info info = {0};
             info.filename = so_clone(so_l(dir->d_name));
-            stat(dir->d_name, &info.stats);
+            so_path_join(&info.path, dirname, info.filename);
+            cfilename = so_dup(info.path);
+            stat(cfilename, &info.stats);
             file_infos_push_back(infos, &info);
         }
         closedir(d);
     }
     free(cdirname);
+    free(cfilename);
     file_infos_sort(infos);
     return(0);
+}
+
+void t_file_infos_set_get(T_File_Infos *t, File_Infos **out, So path) {
+    File_Infos *infos = t_file_infos_get(t, &path);
+    if(!infos) {
+        File_Infos infos_new = {0};
+        read_dir(path, &infos_new);
+        infos = t_file_infos_once(t, &path, &infos_new)->val;
+    }
+    *out = infos;
 }
 
 size_t file_info_rel(File_Info *info) {
@@ -206,54 +240,28 @@ char *file_info_relcstr(File_Info *info) {
 
 #define array_back(x)   array_at((x), array_len(x) - 1)
 
-void render_split(So *out, State *st, size_t y) {
-    so_fmt(out, TUI_ESC_CODE_GOTO(st->al.split, y));
-    //so_extend(out, so(F("│", BG_BK_B FG_YL_B)));
-    so_extend(out, so("│"));
-}
-
-void render_file_info(So *out, State *st, File_Info *info) {
-    so_clear(&st->dyn->tmp);
-
-    Fx fx = (Fx){ IT FG_CY };
-    array_push(st->dyn->fx, fx);
-    fmt_fx_on(&st->dyn->tmp, st->dyn->fx);
-    so_fmt(&st->dyn->tmp, "%3.0f %-3s", file_info_relsize(info), file_info_relcstr(info));
-    array_pop(st->dyn->fx);
-
-    fmt_fx_on(&st->dyn->tmp, st->dyn->fx);
-    so_fmt(&st->dyn->tmp, " %.*s ", SO_F(info->filename));
-
-    fmt_fx_on(&st->dyn->tmp, st->dyn->fx);
-
-    so_al_cache_clear(st->alc);
-    so_extend_al(out, st->al.filenames, 0, st->dyn->tmp);
-}
-
-void select_up(State *st) {
+void select_up(State *st, size_t n) {
+    if(!st->file_infos) return;
     if(!st->select) {
-        st->select = file_infos_length(st->dyn->infos) - 1;
-        st->offset = st->select + 1 > st->rect_files.dimension.y ? st->select + 1 - st->rect_files.dimension.y : 0;
-        if(st->offset) st->render.filenames = true;
+        st->select = file_infos_length(*st->file_infos) - 1;
+        st->offset = st->select + 1 > st->rc_files.dim.y ? st->select + 1 - st->rc_files.dim.y : 0;
     } else {
         --st->select;
         if(st->offset) {
             --st->offset;
-            st->render.filenames = true;
         }
     }
 }
 
-void select_down(State *st) {
+void select_down(State *st, size_t n) {
+    if(!st->file_infos) return;
     ++st->select;
-    if(st->select >= file_infos_length(st->dyn->infos)) {
+    if(st->select >= file_infos_length(*st->file_infos)) {
         st->select = 0;
-        if(st->offset) st->render.filenames = true;
         st->offset = 0;
     }
-    if(st->select >= st->offset + st->rect_files.dimension.y) {
+    if(st->select >= st->offset + st->rc_files.dim.y) {
         ++st->offset;
-        st->render.filenames = true;
     }
 }
 
@@ -273,6 +281,7 @@ void state_global_set(Context2 *st) {
     state_global = st;
 }
 
+#if 0
 void state_apply_split(State *st) {
 #if 1
     st->rect_preview = (Tui_Rect){
@@ -297,6 +306,7 @@ void state_apply_split(State *st) {
     so_al_config(&st->al.preview, 0, 0, st->rect_preview.dimension.x, 1, st->alc);
     so_al_config(&st->al.header, 0, 0, st->dimension.x, 1, st->alc);
 }
+#endif
 
 void signal_winch(int x) {
 
@@ -307,7 +317,7 @@ void signal_winch(int x) {
     pthread_cond_signal(&ctx->cond);
 }
 
-void handle_resize(So *out, Context2 *ctx) {
+void handle_resize(Context2 *ctx) {
     if(!ctx->resized) return;
     ctx->resized = false;
     
@@ -319,8 +329,18 @@ void handle_resize(So *out, Context2 *ctx) {
         .y = w.ws_row,
     };
 
-    tui_screen_resize(&ctx->screen, dimension);
-    so_fmt(out, TUI_ESC_CODE_CLEAR);
+    //array_resize(ctx->setbuf, dimension.x * dimension.y);
+    //setvbuf(stdout, ctx->setbuf, _IOFBF, dimension.x * dimension.y); // unbuffered stdout
+
+    tui_buffer_resize(&ctx->buffer, dimension);
+    //so_fmt(out, TUI_ESC_CODE_CLEAR);
+}
+
+Tui_Point tui_rect_project_point(Tui_Rect rc, Tui_Point pt) {
+    Tui_Point result = pt;
+    result.x -= rc.anc.x;
+    result.y -= rc.anc.y;
+    return result;
 }
 
 void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
@@ -334,21 +354,42 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
             if(ctx->input.id == INPUT_TEXT && ctx->input.text.len == 1) {
                 switch(ctx->input.text.str[0]) {
                     case 'q': ctx->quit = true; break;
-                    default:
-                              break;
+                    case 'j': ctx->ac.select_down = 1; break;
+                    case 'k': ctx->ac.select_up = 1; break;
+                    case 'h': ctx->ac.select_left = 1; break;
+                    case 'l': ctx->ac.select_right = 1; break;
+                    default: break;
                 }
             }
             if(ctx->input.id == INPUT_KEY) {
                 if(ctx->input.key == KEY_UP) {
+                    ctx->ac.select_up = 1;
                 }
                 if(ctx->input.key == KEY_DOWN) {
+                    ctx->ac.select_down = 1;
+                }
+                if(ctx->input.key == KEY_LEFT) {
+                    ctx->ac.select_left = 1;
+                }
+                if(ctx->input.key == KEY_RIGHT) {
+                    ctx->ac.select_right = 1;
                 }
             }
             if(ctx->input.id == INPUT_MOUSE) {
-                if(ctx->input.mouse.scroll > 0) {
-                } else if(ctx->input.mouse.scroll < 0) {
+                if(tui_rect_encloses_point(ctx->st.rc_files, ctx->input.mouse.pos)) {
+                    if(ctx->input.mouse.scroll > 0) {
+                        ctx->ac.select_down = 1;
+                    } else if(ctx->input.mouse.scroll < 0) {
+                        ctx->ac.select_up = 1;
+                    }
                 }
-                if(ctx->input.mouse.l || ctx->input.mouse.m) {
+                if(ctx->input.mouse.l) {
+                    if(tui_rect_encloses_point(ctx->st.rc_files, ctx->input.mouse.pos)) {
+                        Tui_Point pt = tui_rect_project_point(ctx->st.rc_files, ctx->input.mouse.pos);
+                        ctx->st.select = pt.y + ctx->st.offset;
+                    }
+                }
+                if(ctx->input.mouse.m) {
                 }
                 if(ctx->input.mouse.r) {
                     if(!ctx->input_prev.mouse.r) {
@@ -365,12 +406,14 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
     return 0;
 }
 
+#if 0
 void context_free(Context *ctx) {
     so_free(&ctx->st_ext.dyn->tmp);
     file_infos_free(&ctx->st_ext.dyn->infos);
     array_free(ctx->st_ext.dyn->fx);
     pw_free(&ctx->pw);
 }
+#endif
 
 static unsigned int g_seed;
 
@@ -388,63 +431,244 @@ inline int fast_rand(void) {
 }
 int fast_rand(void);
 
+void render_file_infos(Context2 *ctx, File_Infos *file_infos, Tui_Rect rc) {
+    if(!file_infos) return;
+    State *st = &ctx->st;
+    So *tmp = &st->tmp;
+    /* draw file infos */
+    Tui_Color sel_bg = { .type = TUI_COLOR_8, .col8 = 7 };
+    Tui_Color sel_fg = { .type = TUI_COLOR_8, .col8 = 0 };
+    ssize_t dim_y = rc.dim.y;
+    rc.dim.y = 1;
+    for(size_t i = st->offset; i < file_infos_length(*file_infos); ++i) {
+        if(i >= st->offset + dim_y) break;
+        File_Info *info = file_infos_get_at(file_infos, i);
+        Tui_Color *fg = info->selected ? &sel_fg : 0;
+        Tui_Color *bg = info->selected ? &sel_bg : 0;
+        so_clear(tmp);
+        so_extend(tmp, info->filename);
+        so_push(tmp, '\n');
+        tui_buffer_draw(&ctx->buffer, rc, fg, bg, 0, *tmp);
+        ++rc.anc.y;
+    }
+}
+
 void render(Context2 *ctx) {
-    Tui_Rect rc = {
-        .anc = (Tui_Point){ .x = 0, .y = 0 },
-        .dim = (Tui_Point){ .x = ctx->screen.dimension.x, .y = ctx->screen.dimension.y },
-        //.dim = (Tui_Point){ .x = 1, .y = 1 },
-        //.dim = (Tui_Point){ .x = 1, .y = 1 }
-    };
-    So tmp = SO;
-    for(size_t i = 0; i < ctx->screen.dimension.y; ++i) {
-        for(size_t j = 0; j < ctx->screen.dimension.x; ++j) {
-            so_extend(&tmp, so("⢕"));
-        }
-        so_extend(&tmp, so("\n"));
+    tui_buffer_clear(&ctx->buffer);
+    
+    State *st = &ctx->st;
+    So *tmp = &st->tmp;
+    
+    /* draw file preview */
+#if 1
+    so_clear(tmp);
+    File_Info *current = 0;
+    for(size_t i = 0; st->file_infos && i < file_infos_length(*st->file_infos); ++i) {
+        File_Info *unsel = file_infos_get_at(ctx->st.file_infos, i);
+        unsel->selected = false;
     }
-    tui_screen_draw(&ctx->screen, rc, 0, &(Tui_Color){ .r = 0x88, .type = TUI_COLOR_RGB }, &(Tui_Fx){ .bold = true }, tmp);
-    int x = fast_rand();
-    Tui_Color fg = (Tui_Color){ .type = TUI_COLOR_RGB, .g = x, .b = x >> 1, .r = x >> 2 };
-    Tui_Color bg = (Tui_Color){ .type = TUI_COLOR_RGB, .g = x >> 5, .b = x >> 4, .r = x >> 3 };
-    Tui_Fx fx = (Tui_Fx){ .bold = (x>>1)%2, .it = (x>>4)%2, .ul = (x>>6)%2 };
-    so_clear(&tmp);
-    for(size_t j = 1; j < ctx->screen.dimension.y - 1; ++j) {
-    //for(size_t j = 0; j < 1; ++j) {
-        for(size_t i = 2; i < ctx->screen.dimension.x - 2; ++i) {
-            rc.anc.y = j;
-            rc.anc.x = i;
-            rc.dim.x = ctx->screen.dimension.x - i - 1;
-            if(j && fast_rand() % 2 == 0) {
-                so_extend(&tmp, so("🎄"));
-                ++i;
+    if(st->file_infos && st->select < file_infos_length(*st->file_infos)) {
+        current = file_infos_get_at(ctx->st.file_infos, st->select);
+        current->selected = true;
+        if(!so_len(current->content)) {
+            if(S_ISREG(current->stats.st_mode)) {
+                so_file_read(current->path, &current->content);
+                current->printable = true;
+                for(size_t i = 0; i < so_len(current->content); ++i) {
+                    unsigned char c = so_at(current->content, i);
+                    if(!(c >= ' ' || isspace(c))) {
+                        current->printable = false;
+                        break;
+                    }
+                }
+                if(!current->printable) {
+                    so_free(&current->content);
+                }
+            } else if(S_ISDIR(current->stats.st_mode)) {
+                t_file_infos_set_get(&st->t_file_infos, &current->file_infos, current->path);
+                render_file_infos(ctx, current->file_infos, st->rc_preview);
             }
-            else {
-                so_push(&tmp, fast_rand() % ('z'-'A') + 'A');
-                //so_push(&tmp, ' ');
-            }
-            x = fast_rand();
-    //Tui_Color fg = (Tui_Color){ .type = TUI_COLOR_RGB, .g = x, .b = x >> 1, .r = x >> 2 };
-    //Tui_Color bg = (Tui_Color){ .type = TUI_COLOR_RGB, .g = x >> 5, .b = x >> 4, .r = x >> 3 };
-    //Tui_Fx fx = (Tui_Fx){ .bold = (x>>1)%2, .it = (x>>4)%2, .ul = (x>>6)%2 };
-            tui_screen_draw(&ctx->screen, rc, &fg, &bg, &fx, tmp);
-            so_clear(&tmp);
         }
-    }
-    so_free(&tmp);
-#if 0
-    Tui_Point pt;
-    Tui_Rect cnv = { .dim = ctx->screen.dimension };
-    --cnv.dim.x;
-    --cnv.dim.y;
-    for(pt.y = rc.anc.y; pt.y < rc.anc.y + rc.dim.y; ++pt.y) {
-        for(pt.x = rc.anc.x; pt.x < rc.anc.x + rc.dim.x; ++pt.x) {
-            if(!tui_rect_contains_point(cnv, pt)) continue;
-            //printff("\rRENDER %u,%u", pt.x,pt.y);
-            Tui_Cell *cell = tui_buffer_at(&ctx->screen.now, pt);
-            cell->ucp.val = fast_rand() % ('z'-'A') + 'A';
+        if(current->printable) {
+            tui_buffer_draw(&ctx->buffer, st->rc_preview, 0, 0, 0, current->content);
         }
     }
 #endif
+
+#if 1
+    /* draw vertical bar */
+    so_clear(tmp);
+    for(size_t i = 0; i < st->rc_split.dim.y; ++i) {
+        so_extend(tmp, so("│\n"));
+    }
+    tui_buffer_draw(&ctx->buffer, st->rc_split, 0, 0, 0, *tmp);
+
+    /* draw file infos */
+    render_file_infos(ctx, st->file_infos, st->rc_files);
+#endif
+
+    /* draw current dir/file/type */
+    Tui_Color bar_bg = { .type = TUI_COLOR_8, .col8 = 1 };
+    Tui_Color bar_fg = { .type = TUI_COLOR_8, .col8 = 7 };
+    Tui_Fx bar_fx = { .bold = true };
+    if(current) {
+        so_clear(tmp);
+        Tui_Rect rc_mode = st->rc_pwd;
+        if(S_ISDIR(current->stats.st_mode)) {
+            so_fmt(tmp, "[DIR]");
+            bar_bg.col8 = 4;
+        } else if(S_ISREG(current->stats.st_mode)) {
+            so_fmt(tmp, "[FILE]");
+            bar_bg.col8 = 5;
+        } else {
+            so_fmt(tmp, "[?]");
+        }
+        tui_buffer_draw(&ctx->buffer, st->rc_pwd, &bar_fg, &bar_bg, &bar_fx, current->path);
+        rc_mode.dim.x = tmp->len;
+        rc_mode.anc.x = ctx->buffer.dimension.x - rc_mode.dim.x;
+        tui_buffer_draw(&ctx->buffer, rc_mode, &bar_fg, &bar_bg, &bar_fx, *tmp);
+    } else {
+        tui_buffer_draw(&ctx->buffer, st->rc_pwd, &bar_fg, &bar_bg, &bar_fx, st->pwd);
+    }
+
+}
+
+Tui_Rect tui_rect(ssize_t anc_x, ssize_t anc_y, ssize_t dim_x, ssize_t dim_y) {
+    return (Tui_Rect){
+        .anc = (Tui_Point){ .x = anc_x, .y = anc_y },
+        .dim = (Tui_Point){ .x = dim_x, .y = dim_y },
+    };
+}
+
+void update(Context2 *ctx) {
+    State *st = &ctx->st;
+    st->rc_files.anc.x = 0;
+    st->rc_files.anc.y = 1;
+    st->rc_files.dim.x = ctx->buffer.dimension.x / 2;
+    st->rc_files.dim.y = ctx->buffer.dimension.y - 1;
+    st->rc_split.anc.x = st->rc_files.dim.x;
+    st->rc_split.anc.y = 1;
+    st->rc_split.dim.x = 1;
+    st->rc_split.dim.y = ctx->buffer.dimension.y - 1;;
+    st->rc_preview.anc.x = st->rc_split.anc.x + 1;
+    st->rc_preview.anc.y = 1;
+    st->rc_preview.dim.x = ctx->buffer.dimension.x - st->rc_files.anc.x;
+    st->rc_preview.dim.y = ctx->buffer.dimension.y - 1;;
+    st->rc_pwd.anc.x = 0;
+    st->rc_pwd.anc.y = 0; //ctx->buffer.dimension.y - 1;
+    st->rc_pwd.dim.x = ctx->buffer.dimension.x;
+    st->rc_pwd.dim.y = 1;
+    if(ctx->ac.select_left) {
+        So left = so_ensure_dir(so_rsplit_ch(st->pwd, PLATFORM_CH_SUBDIR, 0));
+        if(left.len) {
+            st->pwd = left;
+            st->select = 0;
+            st->offset = 0;
+            st->file_infos = 0;
+        } else {
+            so_copy(&st->pwd, so("/"));
+            st->select = 0;
+            st->offset = 0;
+            st->file_infos = 0;
+        }
+    }
+    if(ctx->ac.select_right && st->file_infos) {
+        if(st->select < file_infos_length(*st->file_infos)) {
+            File_Info *sel = file_infos_get_at(st->file_infos, st->select);
+            if(S_ISDIR(sel->stats.st_mode)) {
+                so_path_join(&st->pwd, st->pwd, sel->filename);
+                st->file_infos = 0;
+                st->select = 0;
+                st->offset = 0;
+            } else if(S_ISREG(sel->stats.st_mode)) {
+                So ed = SO;
+                char *ced = 0;
+                so_env_get(&ed, so("EDITOR"));
+                if(so_len(ed)) {
+#if 0
+                    so_fmt(&ed, " '%.*s'", SO_F(sel->path));
+                    ced = so_dup(ed);
+                    tui_exit();
+                    system(ced);
+                    tui_enter();
+#endif
+                } else {
+                    printff("\rNO EDITOR FOUND");
+                    exit(1);
+                }
+                so_free(&ed);
+                free(ced);
+            }
+        }
+    }
+    if(!so_len(st->pwd)) {
+        so_env_get(&st->pwd, so("PWD"));
+    }
+    if(!st->file_infos) {
+        t_file_infos_set_get(&st->t_file_infos, &st->file_infos, st->pwd);
+    }
+    if(ctx->ac.select_up) {
+        select_up(st, ctx->ac.select_up);
+    }
+    if(ctx->ac.select_down) {
+        select_down(st, ctx->ac.select_down);
+    }
+    memset(&ctx->ac, 0, sizeof(ctx->ac));
+}
+
+void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
+    Context2 *ctx = void_ctx;
+    So draw = SO;
+    while(!*quit) {
+        bool render_do = false;
+        bool render_busy = false;
+
+        pthread_mutex_lock(&ctx->render_mtx);
+        render_busy = ctx->render_busy;
+        ctx->render_do = false;
+        ctx->render_busy = false;
+        if(!ctx->render_busy) {
+            pthread_cond_wait(&ctx->render_cond, &ctx->render_mtx);
+        }
+        render_do = ctx->render_do;
+        pthread_mutex_unlock(&ctx->render_mtx);
+
+        if(render_busy) {
+            pthread_mutex_lock(&ctx->mtx);
+            pthread_cond_signal(&ctx->cond);
+            pthread_mutex_unlock(&ctx->mtx);
+            continue;
+        }
+
+        if(!render_do) continue;
+
+        so_clear(&draw);
+        tui_screen_fmt(&draw, &ctx->screen);
+
+        ssize_t len = draw.len;
+        ssize_t written = 0;
+        char *begin = so_it0(draw);
+        while(written < len) {
+            errno = 0;
+            ssize_t written_chunk = write(STDOUT_FILENO, begin, len - written);
+            if(written_chunk > 0) {
+                written += written_chunk;
+                begin += written_chunk;
+            } else {
+                if(errno) {
+                    printff("\rerrno on write: %u", errno);exit(1);
+                } else {
+                    continue;
+                }
+            }
+        }
+        //fflush(stdout);
+        ++ctx->frames;
+
+        //so_file_write(so("out.txt"), draw);
+        //tui_write_so(draw);
+    }
+    return 0;
 }
 
 int main(void) {
@@ -462,211 +686,61 @@ int main(void) {
     pw_queue(&ctx.pw, pw_queue_process_input, &ctx);
     pw_dispatch(&ctx.pw);
 
+    pw_init(&ctx.pw_render, 1);
+    pw_queue(&ctx.pw_render, pw_queue_render, &ctx);
+    pw_dispatch(&ctx.pw_render);
+
     fast_srand(time(0));
 
-#if 1
     //for(size_t i = 0; i < 1000; ++i) {
+    clock_gettime(CLOCK_REALTIME, &ctx.t0);
     for(;;) {
         if(ctx.quit) break;
-        so_clear(&out);
-        handle_resize(&out, &ctx);
+        handle_resize(&ctx);
+        update(&ctx);
         render(&ctx);
-        tui_screen_fmt(&out, &ctx.screen);
-        //printf("\r");
-        //so_printdbg(out);
-        tui_write_so(out);
+
+#if 1
+        pthread_mutex_lock(&ctx.render_mtx);
+        if(!ctx.render_do) {
+            if(tui_point_cmp(ctx.screen.dimension, ctx.buffer.dimension)) {
+                tui_screen_resize(&ctx.screen, ctx.buffer.dimension);
+            }
+            memcpy(ctx.screen.now.cells, ctx.buffer.cells, sizeof(Tui_Cell) * ctx.buffer.dimension.x * ctx.buffer.dimension.y);
+            ctx.render_do = true;
+        } else {
+            //printff("RENDER BUSY");exit(1);
+            ctx.render_busy = true;
+        }
+        pthread_mutex_unlock(&ctx.render_mtx);
+        pthread_cond_signal(&ctx.render_cond);
+#endif
 
 #if 1
         pthread_mutex_lock(&ctx.mtx);
         if(!ctx.resized) {
+            //ctx.ac.select_down = 1;
             pthread_cond_wait(&ctx.cond, &ctx.mtx);
         }
         pthread_mutex_unlock(&ctx.mtx);
 #endif
     }
-#else
-    for(;;) {
-        State st = ctx.st_ext;
-        if(st.quit) break;
-        /* render - prepare */
-        so_clear(&out);
-        gettimeofday(&st.t, NULL);
-        so_fmt(&out, TUI_ESC_CODE_CURSOR_HIDE);
-        /* render - draw */
-        render_any(&st.render);
-        if(st.render.all) {
-            so_fmt(&out, TUI_ESC_CODE_CLEAR);
-        }
-        if(st.render.spinner) {
-            so_al_cache_clear(st.alc);
-            time_t rawtime;
-            struct tm *timeinfo;
-            time(&rawtime);
-            timeinfo = localtime(&rawtime);
-            size_t i_loading = (size_t)((st.t.tv_sec + (double)st.t.tv_usec * 1e-6) * 10);
 
-            Fx fx = (Fx){ BOLD BG_BK_B FG_YL_B };
-            array_push(st.dyn->fx, fx);
-            so_fmt(&out, TUI_ESC_CODE_GOTO(0, 0));
-            fmt_fx_on(&out, st.dyn->fx);
-            so_clear(&st.dyn->tmp);
-            so_fmt(&st.dyn->tmp, "%c gaki %c %4u-%02u-%02u %02u:%02u:%02u ", \
-                    loading_set[(i_loading + (sizeof(loading_set)-1)/2) % (sizeof(loading_set)-1)], \
-                    loading_set[i_loading % (sizeof(loading_set)-1)], \
-                    1900+timeinfo->tm_year, timeinfo->tm_mon, timeinfo->tm_mday,
-                    timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec
-                    );
-            so_extend_al(&out, st.al.header, 0, st.dyn->tmp);
+    clock_gettime(CLOCK_REALTIME, &ctx.tE);
 
-            st.wave_width = st.dimension.x > ctx.alc.progress ? st.dimension.x - ctx.alc.progress : 0;
-            double delta = timeval_d(st.t) - timeval_d(stdiff.t);
-            double t_delta_wave_step = 0.1;
-            st.t_delta_wave += delta;
-            for(double t = 0; t + t_delta_wave_step < st.t_delta_wave; t += t_delta_wave_step) {
-                st.t_delta_wave -= t_delta_wave_step;
-                if(!st.wave_reverse) {
-                    if(st.wave_right < st.wave_width) {
-                        ++st.wave_right;
-                    } else if(st.wave_left < st.wave_width) {
-                        ++st.wave_left;
-                        if(st.wave_left >= st.wave_width) {
-                            st.wave_reverse = true;
-                        }
-                    }
-                } else {
-                    if(st.wave_left > 0) {
-                        --st.wave_left;
-                    } else if(st.wave_right > 0) {
-                        --st.wave_right;
-                        if(!st.wave_right) {
-                            st.wave_reverse = false;
-                        }
-                    }
-                }
-            }
-
-            for(size_t i = 0; i < st.wave_width; ++i) {
-                if((st.wave_left <= st.wave_right && i >= st.wave_left && i <= st.wave_right)) {
-                    so_extend_al(&out, st.al.header, 0, so("."));
-                } else {
-                    so_extend_al(&out, st.al.header, 0, so(" "));
-                }
-            }
-            fmt_fx_off(&out);
-            array_pop(st.dyn->fx);
-        }
-        if(st.render.filenames) {
-            if(!file_infos_length(st.dyn->infos)) {
-                file_infos_free(&st.dyn->infos);
-                read_dir(so("."), &st.dyn->infos);
-            }
-            for(size_t i = st.offset; i < file_infos_length(st.dyn->infos); ++i) {
-                if(i - st.offset < st.rect_files.dimension.y) {
-                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + i - st.offset));
-                    tui_fmt_clear_line(&out, st.rect_files.dimension.x);
-                    File_Info *info = file_infos_get_at(&st.dyn->infos, i);
-                    so_clear(&st.dyn->tmp);
-                    so_extend_al(&out, st.al.filenames, 0, st.dyn->tmp);
-                    render_file_info(&out, &st, info);
-                }
-            }
-        }
-        if(st.render.select) {
-            st.render.preview = true;
-            if(!st.render.filenames && stdiff.select < file_infos_length(st.dyn->infos)) {
-                if(stdiff.select - stdiff.offset < st.rect_files.dimension.y) {
-                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + stdiff.select - stdiff.offset));
-                    tui_fmt_clear_line(&out, st.rect_files.dimension.x);
-                    File_Info *info = file_infos_get_at(&st.dyn->infos, stdiff.select);
-                    render_file_info(&out, &st, info);
-                    render_split(&out, &st, st.rect_files.anchor.y + stdiff.select);
-                }
-            }
-            if(st.select < file_infos_length(st.dyn->infos)) {
-                if(st.select - st.offset < st.rect_files.dimension.y) {
-                    Fx fx = { BG_WT_B FG_BK };
-                    array_push(st.dyn->fx, fx);
-
-                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_files.anchor.x, st.rect_files.anchor.y + st.select - st.offset));
-                    File_Info *info = file_infos_get_at(&st.dyn->infos, st.select);
-                    render_file_info(&out, &st, info);
-
-                    for(size_t i = 0; i < st.dimension.x; ++i) {
-                        so_extend_al(&out, st.al.filenames, 0, so(" "));
-                    }
-
-                    array_pop(st.dyn->fx);
-                    fmt_fx_off(&out);
-                    render_split(&out, &st, st.rect_files.anchor.y + st.select);
-                }
-            }
-        }
-        if(st.render.split) {
-            for(size_t i = 0; i < st.rect_files.dimension.y; ++i) {
-                render_split(&out, &st, st.rect_files.anchor.y + i);
-            }
-        }
-        if(st.render.preview) {
-            File_Info *info = file_infos_get_at(&st.dyn->infos, st.select);
-            if(so_is_empty(info->content)) {
-                so_file_read(info->filename, &info->content);
-                info->printable = true;
-                for(size_t i = 0; i < so_len(info->content); ++i) {
-                    unsigned char c = so_at(info->content, i);
-                    if(!(c >= ' ' || isspace(c))) {
-                        info->printable = false;
-                        break;
-                    }
-                }
-            }
-            size_t line_nb = 0;
-            if(info->printable) {
-                for(So line = SO; so_splice(info->content, &line, '\n'); ) {
-                    if(line_nb + st.rect_preview.anchor.y >= st.dimension.y) break;
-                    //printff("LINE:%.*s",SO_F(line));
-                    if(so_is_zero(line)) continue;
-                    so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, line_nb + st.rect_preview.anchor.y));
-                    tui_fmt_clear_line(&out, st.rect_preview.dimension.x);
-                    so_al_cache_clear(st.alc);
-                    so_extend_al(&out, st.al.preview, 0, line);
-                    ++line_nb;
-                }
-            } else {
-                so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, st.rect_preview.anchor.y));
-                tui_fmt_clear_line(&out, st.rect_preview.dimension.x);
-                so_al_cache_clear(st.alc);
-                so_extend_al(&out, st.al.preview, 0, so(F("file contains non-printable characters", IT)));
-                ++line_nb;
-            }
-            while(line_nb < st.rect_preview.dimension.y) {
-                so_fmt(&out, TUI_ESC_CODE_GOTO(st.rect_preview.anchor.x, line_nb + st.rect_preview.anchor.y));
-                tui_fmt_clear_line(&out, st.rect_preview.dimension.x);
-                ++line_nb;
-            }
-        }
-        if(!ctx.do_ext) {
-            /* render - out */
-            tui_write_so(out);
-            /* render - reset */
-            stdiff = st;
-            st.render = (Render){0};
-            st.render.spinner = true;
-            ctx.st_ext = st;
-            pthread_cond_wait(&ctx.cond, &ctx.mtx);
-        }
-        ctx.do_ext = false;
-
-        //struct timeval now;
-        //gettimeofday(&now,NULL);
-        //struct timespec until = timespec_add_timeval(ctx.refresh, now);
-        //pthread_cond_timedwait(&ctx.cond, &ctx.mtx, &until);
-    }
-
-    context_free(&ctx);
-#endif
+    //context_free(&ctx);
 
     so_free(&out);
     tui_exit();
+
+#if 0
+    double t0 = ctx.t0.tv_sec + ctx.t0.tv_nsec / 1e9;
+    double tE = ctx.tE.tv_sec + ctx.tE.tv_nsec / 1e9;
+    printff("\rt delta %f", tE-t0);
+    printff("\rframes %zu", ctx.frames);
+    printff("\r= %f fps / %f ms/frame", (double)ctx.frames/(double)(tE-t0), 1000.0*(double)(tE-t0)/ctx.frames);
+#endif
+
     return 0;
 }
 
