@@ -77,9 +77,10 @@ typedef struct File_Info {
     So path;
     union {
         So content;
-        struct File_Infos *file_infos;
+        struct File_Panel *file_panel;
     };
     struct stat stats;
+    size_t offset;
     bool selected;
 } File_Info;
 
@@ -97,14 +98,18 @@ VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, SORT);
 VEC_IMPLEMENT_BASE(File_Infos, file_infos, File_Info, BY_REF, file_info_free);
 VEC_IMPLEMENT_SORT(File_Infos, file_infos, File_Info, BY_REF, file_info_cmp);
 
-LUT_INCLUDE(T_File_Infos, t_file_infos, So, BY_REF, File_Infos, BY_REF);
-LUT_IMPLEMENT(T_File_Infos, t_file_infos, So, BY_REF, File_Infos, BY_REF, so_hash_p, so_cmp_p, 0, file_infos_free);
+typedef struct File_Panel {
+    File_Infos file_infos;
+    size_t offset;
+    size_t select;
+} File_Panel;
 
-typedef struct State_Dynamic {
-    File_Infos infos;
-    So tmp;
-    Fx *fx;
-} State_Dynamic;
+void file_panel_free(File_Panel *panel) {
+
+}
+
+LUT_INCLUDE(T_File_Panel, t_file_panel, So, BY_REF, File_Panel, BY_REF);
+LUT_IMPLEMENT(T_File_Panel, t_file_panel, So, BY_REF, File_Panel, BY_REF, so_hash_p, so_cmp_p, 0, file_panel_free);
 
 typedef struct Action {
     ssize_t select_up;
@@ -114,16 +119,14 @@ typedef struct Action {
 } Action;
 
 typedef struct State {
-    size_t select;
-    size_t offset;
     So tmp;
     So pwd;
     Tui_Rect rc_files;
     Tui_Rect rc_split;
     Tui_Rect rc_preview;
     Tui_Rect rc_pwd;
-    File_Infos *file_infos;
-    T_File_Infos t_file_infos;
+    File_Panel *file_panel;
+    T_File_Panel t_file_infos;
 } State;
 
 typedef struct Context2 {
@@ -164,18 +167,10 @@ typedef struct Context {
     Pw pw;
 } Context;
 
-bool render_any(Render *render) {
-    bool result = memcmp(render, &(Render){0}, sizeof(Render));
-    if(render->all) {
-        memset(render, true, sizeof(Render));
-    }
-    return result;
-}
-
 #include <dirent.h> 
 #include <stdio.h> 
 
-int read_dir(So dirname, File_Infos *infos) {
+int read_dir(So dirname, File_Panel *panel) {
     DIR *d;
     struct dirent *dir;
     char *cdirname = so_dup(dirname);
@@ -189,24 +184,24 @@ int read_dir(So dirname, File_Infos *infos) {
             so_path_join(&info.path, dirname, info.filename);
             cfilename = so_dup(info.path);
             stat(cfilename, &info.stats);
-            file_infos_push_back(infos, &info);
+            file_infos_push_back(&panel->file_infos, &info);
         }
         closedir(d);
     }
     free(cdirname);
     free(cfilename);
-    file_infos_sort(infos);
+    file_infos_sort(&panel->file_infos);
     return(0);
 }
 
-void t_file_infos_set_get(T_File_Infos *t, File_Infos **out, So path) {
-    File_Infos *infos = t_file_infos_get(t, &path);
-    if(!infos) {
-        File_Infos infos_new = {0};
-        read_dir(path, &infos_new);
-        infos = t_file_infos_once(t, &path, &infos_new)->val;
+void t_file_infos_set_get(T_File_Panel *t, File_Panel **out, So path) {
+    File_Panel *panel = t_file_panel_get(t, &path);
+    if(!panel) {
+        File_Panel panel_new = {0};
+        read_dir(path, &panel_new);
+        panel = t_file_panel_once(t, &path, &panel_new)->val;
     }
-    *out = infos;
+    *out = panel;
 }
 
 size_t file_info_rel(File_Info *info) {
@@ -241,27 +236,27 @@ char *file_info_relcstr(File_Info *info) {
 #define array_back(x)   array_at((x), array_len(x) - 1)
 
 void select_up(State *st, size_t n) {
-    if(!st->file_infos) return;
-    if(!st->select) {
-        st->select = file_infos_length(*st->file_infos) - 1;
-        st->offset = st->select + 1 > st->rc_files.dim.y ? st->select + 1 - st->rc_files.dim.y : 0;
+    if(!st->file_panel) return;
+    if(!st->file_panel->select) {
+        st->file_panel->select = file_infos_length(st->file_panel->file_infos) - 1;
+        st->file_panel->offset = st->file_panel->select + 1 > st->rc_files.dim.y ? st->file_panel->select + 1 - st->rc_files.dim.y : 0;
     } else {
-        --st->select;
-        if(st->offset) {
-            --st->offset;
+        --st->file_panel->select;
+        if(st->file_panel->offset) {
+            --st->file_panel->offset;
         }
     }
 }
 
 void select_down(State *st, size_t n) {
-    if(!st->file_infos) return;
-    ++st->select;
-    if(st->select >= file_infos_length(*st->file_infos)) {
-        st->select = 0;
-        st->offset = 0;
+    if(!st->file_panel) return;
+    ++st->file_panel->select;
+    if(st->file_panel->select >= file_infos_length(st->file_panel->file_infos)) {
+        st->file_panel->select = 0;
+        st->file_panel->offset = 0;
     }
-    if(st->select >= st->offset + st->rc_files.dim.y) {
-        ++st->offset;
+    if(st->file_panel->select >= st->file_panel->offset + st->rc_files.dim.y) {
+        ++st->file_panel->offset;
     }
 }
 
@@ -386,7 +381,9 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                 if(ctx->input.mouse.l) {
                     if(tui_rect_encloses_point(ctx->st.rc_files, ctx->input.mouse.pos)) {
                         Tui_Point pt = tui_rect_project_point(ctx->st.rc_files, ctx->input.mouse.pos);
-                        ctx->st.select = pt.y + ctx->st.offset;
+                        if(ctx->st.file_panel) {
+                            ctx->st.file_panel->select = pt.y + ctx->st.file_panel->offset;
+                        }
                     }
                 }
                 if(ctx->input.mouse.m) {
@@ -431,18 +428,17 @@ inline int fast_rand(void) {
 }
 int fast_rand(void);
 
-void render_file_infos(Context2 *ctx, File_Infos *file_infos, Tui_Rect rc) {
-    if(!file_infos) return;
-    State *st = &ctx->st;
-    So *tmp = &st->tmp;
+void render_file_infos(Context2 *ctx, File_Panel *file_panel, Tui_Rect rc) {
+    if(!file_panel) return;
+    So *tmp = &ctx->st.tmp;
     /* draw file infos */
     Tui_Color sel_bg = { .type = TUI_COLOR_8, .col8 = 7 };
     Tui_Color sel_fg = { .type = TUI_COLOR_8, .col8 = 0 };
     ssize_t dim_y = rc.dim.y;
     rc.dim.y = 1;
-    for(size_t i = st->offset; i < file_infos_length(*file_infos); ++i) {
-        if(i >= st->offset + dim_y) break;
-        File_Info *info = file_infos_get_at(file_infos, i);
+    for(size_t i = file_panel->offset; i < file_infos_length(file_panel->file_infos); ++i) {
+        if(i >= file_panel->offset + dim_y) break;
+        File_Info *info = file_infos_get_at(&file_panel->file_infos, i);
         Tui_Color *fg = info->selected ? &sel_fg : 0;
         Tui_Color *bg = info->selected ? &sel_bg : 0;
         so_clear(tmp);
@@ -463,15 +459,15 @@ void render(Context2 *ctx) {
 #if 1
     so_clear(tmp);
     File_Info *current = 0;
-    for(size_t i = 0; st->file_infos && i < file_infos_length(*st->file_infos); ++i) {
-        File_Info *unsel = file_infos_get_at(ctx->st.file_infos, i);
+    for(size_t i = 0; st->file_panel && i < file_infos_length(st->file_panel->file_infos); ++i) {
+        File_Info *unsel = file_infos_get_at(&ctx->st.file_panel->file_infos, i);
         unsel->selected = false;
     }
-    if(st->file_infos && st->select < file_infos_length(*st->file_infos)) {
-        current = file_infos_get_at(ctx->st.file_infos, st->select);
+    if(st->file_panel && st->file_panel->select < file_infos_length(st->file_panel->file_infos)) {
+        current = file_infos_get_at(&ctx->st.file_panel->file_infos, st->file_panel->select);
         current->selected = true;
-        if(!so_len(current->content)) {
-            if(S_ISREG(current->stats.st_mode)) {
+        if(S_ISREG(current->stats.st_mode)) {
+            if(!so_len(current->content)) {
                 so_file_read(current->path, &current->content);
                 current->printable = true;
                 for(size_t i = 0; i < so_len(current->content); ++i) {
@@ -484,10 +480,16 @@ void render(Context2 *ctx) {
                 if(!current->printable) {
                     so_free(&current->content);
                 }
-            } else if(S_ISDIR(current->stats.st_mode)) {
-                t_file_infos_set_get(&st->t_file_infos, &current->file_infos, current->path);
-                render_file_infos(ctx, current->file_infos, st->rc_preview);
             }
+        } else if(S_ISDIR(current->stats.st_mode)) {
+            t_file_infos_set_get(&st->t_file_infos, &current->file_panel, current->path);
+            render_file_infos(ctx, current->file_panel, st->rc_preview);
+            //if(current->file_infos && !so_cmp(current->filename, so("ws"))) {
+            if(current->file_panel) {
+                //printff("\rgot %u file infos", file_infos_length(*current->file_infos));usleep(1e6);
+                //exit(1);
+            }
+            current->printable = true;
         }
         if(current->printable) {
             tui_buffer_draw(&ctx->buffer, st->rc_preview, 0, 0, 0, current->content);
@@ -504,7 +506,7 @@ void render(Context2 *ctx) {
     tui_buffer_draw(&ctx->buffer, st->rc_split, 0, 0, 0, *tmp);
 
     /* draw file infos */
-    render_file_infos(ctx, st->file_infos, st->rc_files);
+    render_file_infos(ctx, st->file_panel, st->rc_files);
 #endif
 
     /* draw current dir/file/type */
@@ -562,24 +564,18 @@ void update(Context2 *ctx) {
         So left = so_ensure_dir(so_rsplit_ch(st->pwd, PLATFORM_CH_SUBDIR, 0));
         if(left.len) {
             st->pwd = left;
-            st->select = 0;
-            st->offset = 0;
-            st->file_infos = 0;
+            st->file_panel = 0;
         } else {
             so_copy(&st->pwd, so("/"));
-            st->select = 0;
-            st->offset = 0;
-            st->file_infos = 0;
+            st->file_panel = 0;
         }
     }
-    if(ctx->ac.select_right && st->file_infos) {
-        if(st->select < file_infos_length(*st->file_infos)) {
-            File_Info *sel = file_infos_get_at(st->file_infos, st->select);
+    if(ctx->ac.select_right && st->file_panel) {
+        if(st->file_panel->select < file_infos_length(st->file_panel->file_infos)) {
+            File_Info *sel = file_infos_get_at(&st->file_panel->file_infos, st->file_panel->select);
             if(S_ISDIR(sel->stats.st_mode)) {
                 so_path_join(&st->pwd, st->pwd, sel->filename);
-                st->file_infos = 0;
-                st->select = 0;
-                st->offset = 0;
+                st->file_panel = 0;
             } else if(S_ISREG(sel->stats.st_mode)) {
                 So ed = SO;
                 char *ced = 0;
@@ -604,8 +600,8 @@ void update(Context2 *ctx) {
     if(!so_len(st->pwd)) {
         so_env_get(&st->pwd, so("PWD"));
     }
-    if(!st->file_infos) {
-        t_file_infos_set_get(&st->t_file_infos, &st->file_infos, st->pwd);
+    if(!st->file_panel) {
+        t_file_infos_set_get(&st->t_file_infos, &st->file_panel, st->pwd);
     }
     if(ctx->ac.select_up) {
         select_up(st, ctx->ac.select_up);
