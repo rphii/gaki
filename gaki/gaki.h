@@ -35,6 +35,7 @@ typedef struct Gaki {
 Gaki *gaki_global_get(void);
 void gaki_global_set(Gaki *st);
 void gaki_free(Gaki *gaki);
+void gaki_update(Gaki *gaki);
 
 #define GAKI_H
 #endif

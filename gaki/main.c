@@ -36,8 +36,6 @@ struct timespec timespec_add_timeval(struct timespec a, struct timeval b) {
 
 #include <signal.h>
 
-
-
 void signal_winch(int x) {
 
     Gaki *gaki = gaki_global_get();
@@ -59,11 +57,8 @@ void handle_resize(Gaki *gaki) {
         .y = w.ws_row,
     };
 
-    //array_resize(gaki->setbuf, dimension.x * dimension.y);
-    //setvbuf(stdout, gaki->setbuf, _IOFBF, dimension.x * dimension.y); // unbuffered stdout
-
+    gaki->st.pt_dimension = dimension;
     tui_buffer_resize(&gaki->buffer, dimension);
-    //so_fmt(out, TUI_ESC_CODE_CLEAR);
 }
 
 Tui_Point tui_rect_project_point(Tui_Rect rc, Tui_Point pt) {
@@ -264,76 +259,6 @@ Tui_Rect tui_rect(ssize_t anc_x, ssize_t anc_y, ssize_t dim_x, ssize_t dim_y) {
     };
 }
 
-void update(Gaki *gaki) {
-    Gaki_State *st = &gaki->st;
-    st->rc_files.anc.x = 0;
-    st->rc_files.anc.y = 1;
-    st->rc_files.dim.x = gaki->buffer.dimension.x / 2;
-    st->rc_files.dim.y = gaki->buffer.dimension.y - 1;
-    st->rc_split.anc.x = st->rc_files.dim.x;
-    st->rc_split.anc.y = 1;
-    st->rc_split.dim.x = 1;
-    st->rc_split.dim.y = gaki->buffer.dimension.y - 1;;
-    st->rc_preview.anc.x = st->rc_split.anc.x + 1;
-    st->rc_preview.anc.y = 1;
-    st->rc_preview.dim.x = gaki->buffer.dimension.x - st->rc_files.anc.x;
-    st->rc_preview.dim.y = gaki->buffer.dimension.y - 1;;
-    st->rc_pwd.anc.x = 0;
-    st->rc_pwd.anc.y = 0; //gaki->buffer.dimension.y - 1;
-    st->rc_pwd.dim.x = gaki->buffer.dimension.x;
-    st->rc_pwd.dim.y = 1;
-    if(gaki->ac.select_left) {
-        So left = so_ensure_dir(so_rsplit_ch(st->pwd, PLATFORM_CH_SUBDIR, 0));
-        if(left.len) {
-            st->pwd = left;
-            st->file_panel = 0;
-        } else {
-            so_copy(&st->pwd, so("/"));
-            st->file_panel = 0;
-        }
-    }
-    if(gaki->ac.select_right && st->file_panel) {
-        if(st->file_panel->select < file_infos_length(st->file_panel->file_infos)) {
-            File_Info *sel = file_infos_get_at(&st->file_panel->file_infos, st->file_panel->select);
-            if(S_ISDIR(sel->stats.st_mode)) {
-                so_path_join(&st->pwd, st->pwd, sel->filename);
-                st->file_panel = 0;
-            } else if(S_ISREG(sel->stats.st_mode)) {
-                So ed = SO;
-                char *ced = 0;
-                so_env_get(&ed, so("EDITOR"));
-                if(so_len(ed)) {
-#if 0
-                    so_fmt(&ed, " '%.*s'", SO_F(sel->path));
-                    ced = so_dup(ed);
-                    tui_exit();
-                    system(ced);
-                    tui_enter();
-#endif
-                } else {
-                    printff("\rNO EDITOR FOUND");
-                    exit(1);
-                }
-                so_free(&ed);
-                free(ced);
-            }
-        }
-    }
-    if(!so_len(st->pwd)) {
-        so_env_get(&st->pwd, so("PWD"));
-    }
-    if(!st->file_panel) {
-        t_file_panel_ensure_exist(&st->t_file_infos, &st->file_panel, st->pwd);
-    }
-    if(gaki->ac.select_up) {
-        gaki_state_select_up(st, gaki->ac.select_up);
-    }
-    if(gaki->ac.select_down) {
-        gaki_state_select_down(st, gaki->ac.select_down);
-    }
-    memset(&gaki->ac, 0, sizeof(gaki->ac));
-}
-
 void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
     Gaki *gaki = void_ctx;
     So draw = SO;
@@ -411,7 +336,7 @@ int main(void) {
     for(;;) {
         if(gaki.quit) break;
         handle_resize(&gaki);
-        update(&gaki);
+        gaki_state_update(&gaki.st, &gaki.ac);
         render(&gaki);
 
 #if 1

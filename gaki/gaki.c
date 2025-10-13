@@ -12,3 +12,4 @@ void gaki_global_set(Gaki *st) {
 
 void gaki_free(Gaki *gaki) {
 }
+
