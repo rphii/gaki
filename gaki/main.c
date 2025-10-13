@@ -39,10 +39,12 @@ struct timespec timespec_add_timeval(struct timespec a, struct timeval b) {
 void signal_winch(int x) {
 
     Gaki *gaki = gaki_global_get();
-    pthread_mutex_lock(&gaki->mtx);
+
+    pthread_mutex_lock(&gaki->main_mtx);
     gaki->resized = true;
-    pthread_mutex_unlock(&gaki->mtx);
-    pthread_cond_signal(&gaki->cond);
+    gaki->main_update = true;
+    pthread_cond_signal(&gaki->main_cond);
+    pthread_mutex_unlock(&gaki->main_mtx);
 }
 
 void handle_resize(Gaki *gaki) {
@@ -57,7 +59,7 @@ void handle_resize(Gaki *gaki) {
         .y = w.ws_row,
     };
 
-    gaki->st.config.rc = (Tui_Rect){ .dim = dimension };
+    gaki->panel_gaki.config.rc = (Tui_Rect){ .dim = dimension };
 
     tui_buffer_resize(&gaki->buffer, dimension);
 }
@@ -103,7 +105,7 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
             }
 
             if(gaki->input.id == INPUT_MOUSE) {
-                if(tui_rect_encloses_point(gaki->st.layout.rc_files, gaki->input.mouse.pos)) {
+                if(tui_rect_encloses_point(gaki->panel_gaki.layout.rc_files, gaki->input.mouse.pos)) {
                     if(gaki->input.mouse.scroll > 0) {
                         gaki->ac.select_down = 1;
                     } else if(gaki->input.mouse.scroll < 0) {
@@ -111,10 +113,10 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                     }
                 }
                 if(gaki->input.mouse.l) {
-                    if(tui_rect_encloses_point(gaki->st.layout.rc_files, gaki->input.mouse.pos)) {
-                        Tui_Point pt = tui_rect_project_point(gaki->st.layout.rc_files, gaki->input.mouse.pos);
-                        if(gaki->st.panel_file) {
-                            gaki->st.panel_file->select = pt.y + gaki->st.panel_file->offset;
+                    if(tui_rect_encloses_point(gaki->panel_gaki.layout.rc_files, gaki->input.mouse.pos)) {
+                        Tui_Point pt = tui_rect_project_point(gaki->panel_gaki.layout.rc_files, gaki->input.mouse.pos);
+                        if(gaki->panel_gaki.panel_file) {
+                            gaki->panel_gaki.panel_file->select = pt.y + gaki->panel_gaki.panel_file->offset;
                         }
                     }
                 }
@@ -129,7 +131,10 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                     resize_split = false;
                 }
             }
-            pthread_cond_signal(&gaki->cond);
+            pthread_mutex_lock(&gaki->main_mtx);
+            gaki->main_update = true;
+            pthread_cond_signal(&gaki->main_cond);
+            pthread_mutex_unlock(&gaki->main_mtx);
         }
     }
     return 0;
@@ -162,27 +167,28 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
     Gaki *gaki = void_ctx;
     So draw = SO;
     while(!*quit) {
-        bool render_do = false;
-        bool render_busy = false;
+        bool draw_do = false;
+        bool draw_busy = false;
 
-        pthread_mutex_lock(&gaki->render_mtx);
-        render_busy = gaki->render_busy;
-        gaki->render_do = false;
-        gaki->render_busy = false;
-        if(!gaki->render_busy) {
-            pthread_cond_wait(&gaki->render_cond, &gaki->render_mtx);
+        pthread_mutex_lock(&gaki->draw_mtx);
+        draw_busy = gaki->draw_busy;
+        gaki->draw_do = false;
+        gaki->draw_busy = false;
+        if(!gaki->draw_busy) {
+            pthread_cond_wait(&gaki->draw_cond, &gaki->draw_mtx);
         }
-        render_do = gaki->render_do;
-        pthread_mutex_unlock(&gaki->render_mtx);
+        draw_do = gaki->draw_do;
+        pthread_mutex_unlock(&gaki->draw_mtx);
 
-        if(render_busy) {
-            pthread_mutex_lock(&gaki->mtx);
-            pthread_cond_signal(&gaki->cond);
-            pthread_mutex_unlock(&gaki->mtx);
+        if(draw_busy) {
+            pthread_mutex_lock(&gaki->main_mtx);
+            gaki->main_update = true;
+            pthread_cond_signal(&gaki->main_cond);
+            pthread_mutex_unlock(&gaki->main_mtx);
             continue;
         }
 
-        if(!render_do) continue;
+        if(!draw_do) continue;
 
         so_clear(&draw);
         tui_screen_fmt(&draw, &gaki->screen);
@@ -214,19 +220,22 @@ int main(void) {
     tui_enter();
 
     So out = SO;
-    Gaki gaki = { .resized = true };
+    Gaki gaki = { .resized = true, .main_update = true };
 
     gaki_global_set(&gaki);
 
     signal(SIGWINCH, signal_winch);
 
-    pw_init(&gaki.pw, 1);
-    pw_queue(&gaki.pw, pw_queue_process_input, &gaki);
-    pw_dispatch(&gaki.pw);
+    pw_init(&gaki.pw_main, 1);
+    pw_queue(&gaki.pw_main, pw_queue_process_input, &gaki);
+    pw_dispatch(&gaki.pw_main);
 
-    pw_init(&gaki.pw_render, 1);
-    pw_queue(&gaki.pw_render, pw_queue_render, &gaki);
-    pw_dispatch(&gaki.pw_render);
+    pw_init(&gaki.pw_draw, 1);
+    pw_queue(&gaki.pw_draw, pw_queue_render, &gaki);
+    pw_dispatch(&gaki.pw_draw);
+
+    pw_init(&gaki.pw_task, 4);
+    pw_dispatch(&gaki.pw_task);
 
     fast_srand(time(0));
 
@@ -236,34 +245,35 @@ int main(void) {
         if(gaki.quit) break;
         handle_resize(&gaki);
 
-        panel_gaki_update(&gaki.st, &gaki.ac);
+        panel_gaki_update(&gaki.panel_gaki, &gaki.ac);
 
         tui_buffer_clear(&gaki.buffer);
-        panel_gaki_render(&gaki.buffer, &gaki.st);
+        panel_gaki_render(&gaki.buffer, &gaki.panel_gaki);
 
 #if 1
-        pthread_mutex_lock(&gaki.render_mtx);
-        if(!gaki.render_do) {
+        pthread_mutex_lock(&gaki.draw_mtx);
+        if(!gaki.draw_do) {
             if(tui_point_cmp(gaki.screen.dimension, gaki.buffer.dimension)) {
                 tui_screen_resize(&gaki.screen, gaki.buffer.dimension);
             }
             memcpy(gaki.screen.now.cells, gaki.buffer.cells, sizeof(Tui_Cell) * gaki.buffer.dimension.x * gaki.buffer.dimension.y);
-            gaki.render_do = true;
+            gaki.draw_do = true;
         } else {
             //printff("RENDER BUSY");exit(1);
-            gaki.render_busy = true;
+            gaki.draw_busy = true;
         }
-        pthread_mutex_unlock(&gaki.render_mtx);
-        pthread_cond_signal(&gaki.render_cond);
+        pthread_mutex_unlock(&gaki.draw_mtx);
+        pthread_cond_signal(&gaki.draw_cond);
 #endif
 
 #if 1
-        pthread_mutex_lock(&gaki.mtx);
-        if(!gaki.resized) {
+        pthread_mutex_lock(&gaki.main_mtx);
+        if(!gaki.main_update) {
             //gaki.ac.select_down = 1;
-            pthread_cond_wait(&gaki.cond, &gaki.mtx);
+            pthread_cond_wait(&gaki.main_cond, &gaki.main_mtx);
         }
-        pthread_mutex_unlock(&gaki.mtx);
+        gaki.main_update = false;
+        pthread_mutex_unlock(&gaki.main_mtx);
 #endif
     }
 
