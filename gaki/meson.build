@@ -2,8 +2,8 @@
 sources = [
   'main.c',
   'file-info.c',
-  'file-panel.c',
-  'gaki-state.c',
+  'panel-file.c',
+  'panel-gaki.c',
   'gaki.c',
   ]
 

@@ -3,7 +3,7 @@
 #include <rltui.h>
 #include <rlpw.h>
 
-#include "gaki-state.h"
+#include "panel-gaki.h"
 #include "action.h"
 
 typedef struct Gaki {
@@ -21,7 +21,7 @@ typedef struct Gaki {
     bool resized;
     bool quit;
     bool drag;
-    Gaki_State st;
+    Panel_Gaki st;
     Action ac;
 
     pthread_cond_t render_cond;

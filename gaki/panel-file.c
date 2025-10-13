@@ -1,13 +1,13 @@
 #include <dirent.h> 
-#include "file-panel.h"
+#include "panel-file.h"
 
-LUT_IMPLEMENT(T_File_Panel, t_file_panel, So, BY_REF, File_Panel, BY_REF, so_hash_p, so_cmp_p, 0, file_panel_free);
+LUT_IMPLEMENT(T_Panel_File, t_panel_file, So, BY_REF, Panel_File, BY_REF, so_hash_p, so_cmp_p, 0, panel_file_free);
 
-void file_panel_free(File_Panel *panel) {
+void panel_file_free(Panel_File *panel) {
 
 }
 
-int read_dir(So dirname, File_Panel *panel) {
+int read_dir(So dirname, Panel_File *panel) {
     DIR *d;
     struct dirent *dir;
     char *cdirname = so_dup(dirname);
@@ -32,12 +32,12 @@ int read_dir(So dirname, File_Panel *panel) {
 }
 
 
-void t_file_panel_ensure_exist(T_File_Panel *t, File_Panel **out, So path) {
-    File_Panel *panel = t_file_panel_get(t, &path);
+void t_panel_file_ensure_exist(T_Panel_File *t, Panel_File **out, So path) {
+    Panel_File *panel = t_panel_file_get(t, &path);
     if(!panel) {
-        File_Panel panel_new = {0};
+        Panel_File panel_new = {0};
         read_dir(path, &panel_new);
-        panel = t_file_panel_once(t, &path, &panel_new)->val;
+        panel = t_panel_file_once(t, &path, &panel_new)->val;
     }
     *out = panel;
 }

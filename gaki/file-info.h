@@ -9,7 +9,7 @@ typedef struct File_Info {
     So path;
     union {
         So content;
-        struct File_Panel *file_panel;
+        struct Panel_File *panel_file;
     };
     struct stat stats;
     size_t offset;
