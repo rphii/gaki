@@ -249,33 +249,6 @@ void state_global_set(Context2 *st) {
     state_global = st;
 }
 
-#if 0
-void state_apply_split(State *st) {
-#if 1
-    st->rect_preview = (Tui_Rect){
-        .anchor.x = 0, .anchor.y = 1,
-        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split,
-    };
-    st->rect_files = (Tui_Rect){
-        .anchor.x = st->al.split + 1, .anchor.y = 1,
-        .dimension.y = st->dimension.y - 1, .dimension.x = st->dimension.x - st->al.split - 1,
-    };
-#else
-    st->rect_files = (Tui_Rect){
-        .anchor.x = 0, .anchor.y = 1,
-        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split,
-    };
-    st->rect_preview = (Tui_Rect){
-        .anchor.x = st->al.split + 1, .anchor.y = 1,
-        .dimension.y = st->dimension.y - 1, .dimension.x = st->al.split - 1,
-    };
-#endif
-    so_al_config(&st->al.filenames, 0, 0, st->rect_files.dimension.x, 1, st->alc);
-    so_al_config(&st->al.preview, 0, 0, st->rect_preview.dimension.x, 1, st->alc);
-    so_al_config(&st->al.header, 0, 0, st->dimension.x, 1, st->alc);
-}
-#endif
-
 void signal_winch(int x) {
 
     Context2 *ctx = state_global_get();
@@ -343,6 +316,7 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                     ctx->ac.select_right = 1;
                 }
             }
+
             if(ctx->input.id == INPUT_MOUSE) {
                 if(tui_rect_encloses_point(ctx->st.rc_files, ctx->input.mouse.pos)) {
                     if(ctx->input.mouse.scroll > 0) {
@@ -375,15 +349,6 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
     }
     return 0;
 }
-
-#if 0
-void context_free(Context *ctx) {
-    so_free(&ctx->st_ext.dyn->tmp);
-    file_infos_free(&ctx->st_ext.dyn->infos);
-    array_free(ctx->st_ext.dyn->fx);
-    pw_free(&ctx->pw);
-}
-#endif
 
 static unsigned int g_seed;
 
@@ -459,11 +424,6 @@ void render(Context2 *ctx) {
             }
         } else if(S_ISDIR(current->stats.st_mode)) {
             t_file_infos_set_get(&st->t_file_infos, &current->file_panel, current->path);
-            //if(current->file_infos && !so_cmp(current->filename, so("ws"))) {
-            if(current->file_panel) {
-                //printff("\rgot %u file infos", file_infos_length(*current->file_infos));usleep(1e6);
-                //exit(1);
-            }
             current->printable = true;
             render_file_infos(ctx, current->file_panel, st->rc_preview);
         }
@@ -631,11 +591,7 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
                 }
             }
         }
-        //fflush(stdout);
         ++ctx->frames;
-
-        //so_file_write(so("out.txt"), draw);
-        //tui_write_so(draw);
     }
     return 0;
 }
