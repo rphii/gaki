@@ -481,18 +481,18 @@ void render(Context2 *ctx) {
                     so_free(&current->content);
                 }
             }
+            if(current->printable) {
+                tui_buffer_draw(&ctx->buffer, st->rc_preview, 0, 0, 0, current->content);
+            }
         } else if(S_ISDIR(current->stats.st_mode)) {
             t_file_infos_set_get(&st->t_file_infos, &current->file_panel, current->path);
-            render_file_infos(ctx, current->file_panel, st->rc_preview);
             //if(current->file_infos && !so_cmp(current->filename, so("ws"))) {
             if(current->file_panel) {
                 //printff("\rgot %u file infos", file_infos_length(*current->file_infos));usleep(1e6);
                 //exit(1);
             }
             current->printable = true;
-        }
-        if(current->printable) {
-            tui_buffer_draw(&ctx->buffer, st->rc_preview, 0, 0, 0, current->content);
+            render_file_infos(ctx, current->file_panel, st->rc_preview);
         }
     }
 #endif
