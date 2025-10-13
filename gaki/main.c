@@ -7,6 +7,10 @@
 #include <rlpw.h> 
 #include <rlwcwidth.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <unistd.h> 
+
+#include "gaki.h"
 
 double timeval_d(struct timeval v) {
     return (double)v.tv_sec + (double)v.tv_usec * 1e-6;
@@ -30,237 +34,22 @@ struct timespec timespec_add_timeval(struct timespec a, struct timeval b) {
 }
 
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h> 
- 
-typedef struct Render {
-    bool all;
-    bool spinner;
-    bool header;
-    bool filenames;
-    bool select;
-    bool split;
-    bool preview;
-} Render;
-
-typedef struct File_Info {
-    bool printable;
-    So filename;
-    So path;
-    union {
-        So content;
-        struct File_Panel *file_panel;
-    };
-    struct stat stats;
-    size_t offset;
-    bool selected;
-} File_Info;
-
-int file_info_cmp(File_Info *a, File_Info *b) {
-    return so_cmp_s(a->filename, b->filename);
-}
-
-void file_info_free(File_Info *a) {
-    so_free(&a->filename);
-    so_free(&a->content);
-}
-
-VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, BASE);
-VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, SORT);
-VEC_IMPLEMENT_BASE(File_Infos, file_infos, File_Info, BY_REF, file_info_free);
-VEC_IMPLEMENT_SORT(File_Infos, file_infos, File_Info, BY_REF, file_info_cmp);
-
-typedef struct File_Panel {
-    File_Infos file_infos;
-    size_t offset;
-    size_t select;
-} File_Panel;
-
-void file_panel_free(File_Panel *panel) {
-
-}
-
-LUT_INCLUDE(T_File_Panel, t_file_panel, So, BY_REF, File_Panel, BY_REF);
-LUT_IMPLEMENT(T_File_Panel, t_file_panel, So, BY_REF, File_Panel, BY_REF, so_hash_p, so_cmp_p, 0, file_panel_free);
-
-typedef struct Action {
-    ssize_t select_up;
-    ssize_t select_down;
-    ssize_t select_left;
-    ssize_t select_right;
-} Action;
-
-typedef struct State {
-    So tmp;
-    So pwd;
-    Tui_Rect rc_files;
-    Tui_Rect rc_split;
-    Tui_Rect rc_preview;
-    Tui_Rect rc_pwd;
-    File_Panel *file_panel;
-    T_File_Panel t_file_infos;
-} State;
-
-typedef struct Context2 {
-    struct timespec t0;
-    struct timespec tE;
-    Tui_Input input;
-    Tui_Input input_prev;
-    Tui_Screen screen;
-    Tui_Buffer buffer;
-    pthread_cond_t cond;
-    pthread_mutex_t mtx;
-    Pw pw;
-    Pw pw_render;
-    char *setbuf;
-    bool resized;
-    bool quit;
-    bool drag;
-    State st;
-    Action ac;
-
-    pthread_cond_t render_cond;
-    pthread_mutex_t render_mtx;
-    bool render_do;
-    bool render_busy;
-    size_t frames;
-
-} Context2;
-
-typedef struct Context {
-    struct timespec refresh;
-    Tui_Input input;
-    Tui_Input input_prev;
-    pthread_cond_t cond;
-    State st_ext;
-    bool do_ext;
-    pthread_mutex_t mtx;
-    So_Align_Cache alc;
-    Pw pw;
-} Context;
-
-#include <dirent.h> 
-#include <stdio.h> 
-
-int read_dir(So dirname, File_Panel *panel) {
-    DIR *d;
-    struct dirent *dir;
-    char *cdirname = so_dup(dirname);
-    char *cfilename = 0;
-    d = opendir(cdirname);
-    if (d) {
-        while ((dir = readdir(d)) != NULL) {
-            if(dir->d_name[0] == '.') continue;
-            File_Info info = {0};
-            info.filename = so_clone(so_l(dir->d_name));
-            so_path_join(&info.path, dirname, info.filename);
-            cfilename = so_dup(info.path);
-            stat(cfilename, &info.stats);
-            file_infos_push_back(&panel->file_infos, &info);
-        }
-        closedir(d);
-    }
-    free(cdirname);
-    free(cfilename);
-    file_infos_sort(&panel->file_infos);
-    return(0);
-}
-
-void t_file_infos_set_get(T_File_Panel *t, File_Panel **out, So path) {
-    File_Panel *panel = t_file_panel_get(t, &path);
-    if(!panel) {
-        File_Panel panel_new = {0};
-        read_dir(path, &panel_new);
-        panel = t_file_panel_once(t, &path, &panel_new)->val;
-    }
-    *out = panel;
-}
-
-size_t file_info_rel(File_Info *info) {
-    size_t result;
-    off_t sz = info->stats.st_size;
-    for(result = 1; sz >= result * 1000; result *= 1000) {}
-    return result;
-}
-
-double file_info_relsize(File_Info *info) {
-    size_t factor = file_info_rel(info);
-    //double result = info->stats.st_dev / (double)factor;
-    double result = (double)info->stats.st_size / (double)factor;
-    //double result = info->stats.st_size;
-    return result;
-}
-char *file_info_relcstr(File_Info *info) {
-    size_t factor = file_info_rel(info);
-    switch(factor) {
-        case 1ULL: return "B";
-        case 1000ULL: return "KiB";
-        case 1000000ULL: return "MiB";
-        case 1000000000ULL: return "GiB";
-        case 1000000000000ULL: return "TiB";
-        case 1000000000000000ULL: return "PiB";
-        case 1000000000000000000ULL: return "EiB";
-        default: break;
-    }
-    return "??B";
-}
-
-#define array_back(x)   array_at((x), array_len(x) - 1)
-
-void select_up(State *st, size_t n) {
-    if(!st->file_panel) return;
-    if(!st->file_panel->select) {
-        st->file_panel->select = file_infos_length(st->file_panel->file_infos) - 1;
-        st->file_panel->offset = st->file_panel->select + 1 > st->rc_files.dim.y ? st->file_panel->select + 1 - st->rc_files.dim.y : 0;
-    } else {
-        --st->file_panel->select;
-        if(st->file_panel->offset) {
-            --st->file_panel->offset;
-        }
-    }
-}
-
-void select_down(State *st, size_t n) {
-    if(!st->file_panel) return;
-    ++st->file_panel->select;
-    if(st->file_panel->select >= file_infos_length(st->file_panel->file_infos)) {
-        st->file_panel->select = 0;
-        st->file_panel->offset = 0;
-    }
-    if(st->file_panel->select >= st->file_panel->offset + st->rc_files.dim.y) {
-        ++st->file_panel->offset;
-    }
-}
-
-void select_at(State *st, size_t n) {
-}
-
 #include <signal.h>
 
 
-static Context2 *state_global;
-
-Context2 *state_global_get(void) {
-    return state_global;
-}
-
-void state_global_set(Context2 *st) {
-    state_global = st;
-}
 
 void signal_winch(int x) {
 
-    Context2 *ctx = state_global_get();
-    pthread_mutex_lock(&ctx->mtx);
-    ctx->resized = true;
-    pthread_mutex_unlock(&ctx->mtx);
-    pthread_cond_signal(&ctx->cond);
+    Gaki *gaki = gaki_global_get();
+    pthread_mutex_lock(&gaki->mtx);
+    gaki->resized = true;
+    pthread_mutex_unlock(&gaki->mtx);
+    pthread_cond_signal(&gaki->cond);
 }
 
-void handle_resize(Context2 *ctx) {
-    if(!ctx->resized) return;
-    ctx->resized = false;
+void handle_resize(Gaki *gaki) {
+    if(!gaki->resized) return;
+    gaki->resized = false;
     
     struct winsize w;
     ioctl(0, TIOCGWINSZ, &w);
@@ -270,10 +59,10 @@ void handle_resize(Context2 *ctx) {
         .y = w.ws_row,
     };
 
-    //array_resize(ctx->setbuf, dimension.x * dimension.y);
-    //setvbuf(stdout, ctx->setbuf, _IOFBF, dimension.x * dimension.y); // unbuffered stdout
+    //array_resize(gaki->setbuf, dimension.x * dimension.y);
+    //setvbuf(stdout, gaki->setbuf, _IOFBF, dimension.x * dimension.y); // unbuffered stdout
 
-    tui_buffer_resize(&ctx->buffer, dimension);
+    tui_buffer_resize(&gaki->buffer, dimension);
     //so_fmt(out, TUI_ESC_CODE_CLEAR);
 }
 
@@ -285,58 +74,58 @@ Tui_Point tui_rect_project_point(Tui_Rect rc, Tui_Point pt) {
 }
 
 void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
-    Context2 *ctx = void_ctx;
+    Gaki *gaki = void_ctx;
     bool resize_split = false;
     for(;;) {
-        ctx->input_prev = ctx->input;
+        gaki->input_prev = gaki->input;
         //printff("getting input..\r");
-        if(ctx->quit) break;
-        if(tui_input_process(&ctx->input)) {
-            if(ctx->input.id == INPUT_TEXT && ctx->input.text.len == 1) {
-                switch(ctx->input.text.str[0]) {
-                    case 'q': ctx->quit = true; break;
-                    case 'j': ctx->ac.select_down = 1; break;
-                    case 'k': ctx->ac.select_up = 1; break;
-                    case 'h': ctx->ac.select_left = 1; break;
-                    case 'l': ctx->ac.select_right = 1; break;
+        if(gaki->quit) break;
+        if(tui_input_process(&gaki->input)) {
+            if(gaki->input.id == INPUT_TEXT && gaki->input.text.len == 1) {
+                switch(gaki->input.text.str[0]) {
+                    case 'q': gaki->quit = true; break;
+                    case 'j': gaki->ac.select_down = 1; break;
+                    case 'k': gaki->ac.select_up = 1; break;
+                    case 'h': gaki->ac.select_left = 1; break;
+                    case 'l': gaki->ac.select_right = 1; break;
                     default: break;
                 }
             }
-            if(ctx->input.id == INPUT_KEY) {
-                if(ctx->input.key == KEY_UP) {
-                    ctx->ac.select_up = 1;
+            if(gaki->input.id == INPUT_KEY) {
+                if(gaki->input.key == KEY_UP) {
+                    gaki->ac.select_up = 1;
                 }
-                if(ctx->input.key == KEY_DOWN) {
-                    ctx->ac.select_down = 1;
+                if(gaki->input.key == KEY_DOWN) {
+                    gaki->ac.select_down = 1;
                 }
-                if(ctx->input.key == KEY_LEFT) {
-                    ctx->ac.select_left = 1;
+                if(gaki->input.key == KEY_LEFT) {
+                    gaki->ac.select_left = 1;
                 }
-                if(ctx->input.key == KEY_RIGHT) {
-                    ctx->ac.select_right = 1;
+                if(gaki->input.key == KEY_RIGHT) {
+                    gaki->ac.select_right = 1;
                 }
             }
 
-            if(ctx->input.id == INPUT_MOUSE) {
-                if(tui_rect_encloses_point(ctx->st.rc_files, ctx->input.mouse.pos)) {
-                    if(ctx->input.mouse.scroll > 0) {
-                        ctx->ac.select_down = 1;
-                    } else if(ctx->input.mouse.scroll < 0) {
-                        ctx->ac.select_up = 1;
+            if(gaki->input.id == INPUT_MOUSE) {
+                if(tui_rect_encloses_point(gaki->st.rc_files, gaki->input.mouse.pos)) {
+                    if(gaki->input.mouse.scroll > 0) {
+                        gaki->ac.select_down = 1;
+                    } else if(gaki->input.mouse.scroll < 0) {
+                        gaki->ac.select_up = 1;
                     }
                 }
-                if(ctx->input.mouse.l) {
-                    if(tui_rect_encloses_point(ctx->st.rc_files, ctx->input.mouse.pos)) {
-                        Tui_Point pt = tui_rect_project_point(ctx->st.rc_files, ctx->input.mouse.pos);
-                        if(ctx->st.file_panel) {
-                            ctx->st.file_panel->select = pt.y + ctx->st.file_panel->offset;
+                if(gaki->input.mouse.l) {
+                    if(tui_rect_encloses_point(gaki->st.rc_files, gaki->input.mouse.pos)) {
+                        Tui_Point pt = tui_rect_project_point(gaki->st.rc_files, gaki->input.mouse.pos);
+                        if(gaki->st.file_panel) {
+                            gaki->st.file_panel->select = pt.y + gaki->st.file_panel->offset;
                         }
                     }
                 }
-                if(ctx->input.mouse.m) {
+                if(gaki->input.mouse.m) {
                 }
-                if(ctx->input.mouse.r) {
-                    if(!ctx->input_prev.mouse.r) {
+                if(gaki->input.mouse.r) {
+                    if(!gaki->input_prev.mouse.r) {
                     }
                     if(resize_split) {
                     }
@@ -344,7 +133,7 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                     resize_split = false;
                 }
             }
-            pthread_cond_signal(&ctx->cond);
+            pthread_cond_signal(&gaki->cond);
         }
     }
     return 0;
@@ -366,9 +155,9 @@ inline int fast_rand(void) {
 }
 int fast_rand(void);
 
-void render_file_infos(Context2 *ctx, File_Panel *file_panel, Tui_Rect rc) {
+void render_file_infos(Gaki *gaki, File_Panel *file_panel, Tui_Rect rc) {
     if(!file_panel) return;
-    So *tmp = &ctx->st.tmp;
+    So *tmp = &gaki->st.tmp;
     /* draw file infos */
     Tui_Color sel_bg = { .type = TUI_COLOR_8, .col8 = 7 };
     Tui_Color sel_fg = { .type = TUI_COLOR_8, .col8 = 0 };
@@ -382,15 +171,15 @@ void render_file_infos(Context2 *ctx, File_Panel *file_panel, Tui_Rect rc) {
         so_clear(tmp);
         so_extend(tmp, info->filename);
         so_push(tmp, '\n');
-        tui_buffer_draw(&ctx->buffer, rc, fg, bg, 0, *tmp);
+        tui_buffer_draw(&gaki->buffer, rc, fg, bg, 0, *tmp);
         ++rc.anc.y;
     }
 }
 
-void render(Context2 *ctx) {
-    tui_buffer_clear(&ctx->buffer);
+void render(Gaki *gaki) {
+    tui_buffer_clear(&gaki->buffer);
     
-    State *st = &ctx->st;
+    Gaki_State *st = &gaki->st;
     So *tmp = &st->tmp;
     
     /* draw file preview */
@@ -398,11 +187,11 @@ void render(Context2 *ctx) {
     so_clear(tmp);
     File_Info *current = 0;
     for(size_t i = 0; st->file_panel && i < file_infos_length(st->file_panel->file_infos); ++i) {
-        File_Info *unsel = file_infos_get_at(&ctx->st.file_panel->file_infos, i);
+        File_Info *unsel = file_infos_get_at(&gaki->st.file_panel->file_infos, i);
         unsel->selected = false;
     }
     if(st->file_panel && st->file_panel->select < file_infos_length(st->file_panel->file_infos)) {
-        current = file_infos_get_at(&ctx->st.file_panel->file_infos, st->file_panel->select);
+        current = file_infos_get_at(&gaki->st.file_panel->file_infos, st->file_panel->select);
         current->selected = true;
         if(S_ISREG(current->stats.st_mode)) {
             if(!so_len(current->content)) {
@@ -420,12 +209,12 @@ void render(Context2 *ctx) {
                 }
             }
             if(current->printable) {
-                tui_buffer_draw(&ctx->buffer, st->rc_preview, 0, 0, 0, current->content);
+                tui_buffer_draw(&gaki->buffer, st->rc_preview, 0, 0, 0, current->content);
             }
         } else if(S_ISDIR(current->stats.st_mode)) {
-            t_file_infos_set_get(&st->t_file_infos, &current->file_panel, current->path);
+            t_file_panel_ensure_exist(&st->t_file_infos, &current->file_panel, current->path);
             current->printable = true;
-            render_file_infos(ctx, current->file_panel, st->rc_preview);
+            render_file_infos(gaki, current->file_panel, st->rc_preview);
         }
     }
 #endif
@@ -436,10 +225,10 @@ void render(Context2 *ctx) {
     for(size_t i = 0; i < st->rc_split.dim.y; ++i) {
         so_extend(tmp, so("│\n"));
     }
-    tui_buffer_draw(&ctx->buffer, st->rc_split, 0, 0, 0, *tmp);
+    tui_buffer_draw(&gaki->buffer, st->rc_split, 0, 0, 0, *tmp);
 
     /* draw file infos */
-    render_file_infos(ctx, st->file_panel, st->rc_files);
+    render_file_infos(gaki, st->file_panel, st->rc_files);
 #endif
 
     /* draw current dir/file/type */
@@ -458,12 +247,12 @@ void render(Context2 *ctx) {
         } else {
             so_fmt(tmp, "[?]");
         }
-        tui_buffer_draw(&ctx->buffer, st->rc_pwd, &bar_fg, &bar_bg, &bar_fx, current->path);
+        tui_buffer_draw(&gaki->buffer, st->rc_pwd, &bar_fg, &bar_bg, &bar_fx, current->path);
         rc_mode.dim.x = tmp->len;
-        rc_mode.anc.x = ctx->buffer.dimension.x - rc_mode.dim.x;
-        tui_buffer_draw(&ctx->buffer, rc_mode, &bar_fg, &bar_bg, &bar_fx, *tmp);
+        rc_mode.anc.x = gaki->buffer.dimension.x - rc_mode.dim.x;
+        tui_buffer_draw(&gaki->buffer, rc_mode, &bar_fg, &bar_bg, &bar_fx, *tmp);
     } else {
-        tui_buffer_draw(&ctx->buffer, st->rc_pwd, &bar_fg, &bar_bg, &bar_fx, st->pwd);
+        tui_buffer_draw(&gaki->buffer, st->rc_pwd, &bar_fg, &bar_bg, &bar_fx, st->pwd);
     }
 
 }
@@ -475,25 +264,25 @@ Tui_Rect tui_rect(ssize_t anc_x, ssize_t anc_y, ssize_t dim_x, ssize_t dim_y) {
     };
 }
 
-void update(Context2 *ctx) {
-    State *st = &ctx->st;
+void update(Gaki *gaki) {
+    Gaki_State *st = &gaki->st;
     st->rc_files.anc.x = 0;
     st->rc_files.anc.y = 1;
-    st->rc_files.dim.x = ctx->buffer.dimension.x / 2;
-    st->rc_files.dim.y = ctx->buffer.dimension.y - 1;
+    st->rc_files.dim.x = gaki->buffer.dimension.x / 2;
+    st->rc_files.dim.y = gaki->buffer.dimension.y - 1;
     st->rc_split.anc.x = st->rc_files.dim.x;
     st->rc_split.anc.y = 1;
     st->rc_split.dim.x = 1;
-    st->rc_split.dim.y = ctx->buffer.dimension.y - 1;;
+    st->rc_split.dim.y = gaki->buffer.dimension.y - 1;;
     st->rc_preview.anc.x = st->rc_split.anc.x + 1;
     st->rc_preview.anc.y = 1;
-    st->rc_preview.dim.x = ctx->buffer.dimension.x - st->rc_files.anc.x;
-    st->rc_preview.dim.y = ctx->buffer.dimension.y - 1;;
+    st->rc_preview.dim.x = gaki->buffer.dimension.x - st->rc_files.anc.x;
+    st->rc_preview.dim.y = gaki->buffer.dimension.y - 1;;
     st->rc_pwd.anc.x = 0;
-    st->rc_pwd.anc.y = 0; //ctx->buffer.dimension.y - 1;
-    st->rc_pwd.dim.x = ctx->buffer.dimension.x;
+    st->rc_pwd.anc.y = 0; //gaki->buffer.dimension.y - 1;
+    st->rc_pwd.dim.x = gaki->buffer.dimension.x;
     st->rc_pwd.dim.y = 1;
-    if(ctx->ac.select_left) {
+    if(gaki->ac.select_left) {
         So left = so_ensure_dir(so_rsplit_ch(st->pwd, PLATFORM_CH_SUBDIR, 0));
         if(left.len) {
             st->pwd = left;
@@ -503,7 +292,7 @@ void update(Context2 *ctx) {
             st->file_panel = 0;
         }
     }
-    if(ctx->ac.select_right && st->file_panel) {
+    if(gaki->ac.select_right && st->file_panel) {
         if(st->file_panel->select < file_infos_length(st->file_panel->file_infos)) {
             File_Info *sel = file_infos_get_at(&st->file_panel->file_infos, st->file_panel->select);
             if(S_ISDIR(sel->stats.st_mode)) {
@@ -534,45 +323,45 @@ void update(Context2 *ctx) {
         so_env_get(&st->pwd, so("PWD"));
     }
     if(!st->file_panel) {
-        t_file_infos_set_get(&st->t_file_infos, &st->file_panel, st->pwd);
+        t_file_panel_ensure_exist(&st->t_file_infos, &st->file_panel, st->pwd);
     }
-    if(ctx->ac.select_up) {
-        select_up(st, ctx->ac.select_up);
+    if(gaki->ac.select_up) {
+        gaki_state_select_up(st, gaki->ac.select_up);
     }
-    if(ctx->ac.select_down) {
-        select_down(st, ctx->ac.select_down);
+    if(gaki->ac.select_down) {
+        gaki_state_select_down(st, gaki->ac.select_down);
     }
-    memset(&ctx->ac, 0, sizeof(ctx->ac));
+    memset(&gaki->ac, 0, sizeof(gaki->ac));
 }
 
 void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
-    Context2 *ctx = void_ctx;
+    Gaki *gaki = void_ctx;
     So draw = SO;
     while(!*quit) {
         bool render_do = false;
         bool render_busy = false;
 
-        pthread_mutex_lock(&ctx->render_mtx);
-        render_busy = ctx->render_busy;
-        ctx->render_do = false;
-        ctx->render_busy = false;
-        if(!ctx->render_busy) {
-            pthread_cond_wait(&ctx->render_cond, &ctx->render_mtx);
+        pthread_mutex_lock(&gaki->render_mtx);
+        render_busy = gaki->render_busy;
+        gaki->render_do = false;
+        gaki->render_busy = false;
+        if(!gaki->render_busy) {
+            pthread_cond_wait(&gaki->render_cond, &gaki->render_mtx);
         }
-        render_do = ctx->render_do;
-        pthread_mutex_unlock(&ctx->render_mtx);
+        render_do = gaki->render_do;
+        pthread_mutex_unlock(&gaki->render_mtx);
 
         if(render_busy) {
-            pthread_mutex_lock(&ctx->mtx);
-            pthread_cond_signal(&ctx->cond);
-            pthread_mutex_unlock(&ctx->mtx);
+            pthread_mutex_lock(&gaki->mtx);
+            pthread_cond_signal(&gaki->cond);
+            pthread_mutex_unlock(&gaki->mtx);
             continue;
         }
 
         if(!render_do) continue;
 
         so_clear(&draw);
-        tui_screen_fmt(&draw, &ctx->screen);
+        tui_screen_fmt(&draw, &gaki->screen);
 
         ssize_t len = draw.len;
         ssize_t written = 0;
@@ -591,7 +380,7 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
                 }
             }
         }
-        ++ctx->frames;
+        ++gaki->frames;
     }
     return 0;
 }
@@ -601,69 +390,69 @@ int main(void) {
     tui_enter();
 
     So out = SO;
-    Context2 ctx = { .resized = true };
+    Gaki gaki = { .resized = true };
 
-    state_global_set(&ctx);
+    gaki_global_set(&gaki);
 
     signal(SIGWINCH, signal_winch);
 
-    pw_init(&ctx.pw, 1);
-    pw_queue(&ctx.pw, pw_queue_process_input, &ctx);
-    pw_dispatch(&ctx.pw);
+    pw_init(&gaki.pw, 1);
+    pw_queue(&gaki.pw, pw_queue_process_input, &gaki);
+    pw_dispatch(&gaki.pw);
 
-    pw_init(&ctx.pw_render, 1);
-    pw_queue(&ctx.pw_render, pw_queue_render, &ctx);
-    pw_dispatch(&ctx.pw_render);
+    pw_init(&gaki.pw_render, 1);
+    pw_queue(&gaki.pw_render, pw_queue_render, &gaki);
+    pw_dispatch(&gaki.pw_render);
 
     fast_srand(time(0));
 
     //for(size_t i = 0; i < 1000; ++i) {
-    clock_gettime(CLOCK_REALTIME, &ctx.t0);
+    clock_gettime(CLOCK_REALTIME, &gaki.t0);
     for(;;) {
-        if(ctx.quit) break;
-        handle_resize(&ctx);
-        update(&ctx);
-        render(&ctx);
+        if(gaki.quit) break;
+        handle_resize(&gaki);
+        update(&gaki);
+        render(&gaki);
 
 #if 1
-        pthread_mutex_lock(&ctx.render_mtx);
-        if(!ctx.render_do) {
-            if(tui_point_cmp(ctx.screen.dimension, ctx.buffer.dimension)) {
-                tui_screen_resize(&ctx.screen, ctx.buffer.dimension);
+        pthread_mutex_lock(&gaki.render_mtx);
+        if(!gaki.render_do) {
+            if(tui_point_cmp(gaki.screen.dimension, gaki.buffer.dimension)) {
+                tui_screen_resize(&gaki.screen, gaki.buffer.dimension);
             }
-            memcpy(ctx.screen.now.cells, ctx.buffer.cells, sizeof(Tui_Cell) * ctx.buffer.dimension.x * ctx.buffer.dimension.y);
-            ctx.render_do = true;
+            memcpy(gaki.screen.now.cells, gaki.buffer.cells, sizeof(Tui_Cell) * gaki.buffer.dimension.x * gaki.buffer.dimension.y);
+            gaki.render_do = true;
         } else {
             //printff("RENDER BUSY");exit(1);
-            ctx.render_busy = true;
+            gaki.render_busy = true;
         }
-        pthread_mutex_unlock(&ctx.render_mtx);
-        pthread_cond_signal(&ctx.render_cond);
+        pthread_mutex_unlock(&gaki.render_mtx);
+        pthread_cond_signal(&gaki.render_cond);
 #endif
 
 #if 1
-        pthread_mutex_lock(&ctx.mtx);
-        if(!ctx.resized) {
-            //ctx.ac.select_down = 1;
-            pthread_cond_wait(&ctx.cond, &ctx.mtx);
+        pthread_mutex_lock(&gaki.mtx);
+        if(!gaki.resized) {
+            //gaki.ac.select_down = 1;
+            pthread_cond_wait(&gaki.cond, &gaki.mtx);
         }
-        pthread_mutex_unlock(&ctx.mtx);
+        pthread_mutex_unlock(&gaki.mtx);
 #endif
     }
 
-    clock_gettime(CLOCK_REALTIME, &ctx.tE);
+    clock_gettime(CLOCK_REALTIME, &gaki.tE);
 
-    //context_free(&ctx);
+    gaki_free(&gaki);
 
     so_free(&out);
     tui_exit();
 
 #if 0
-    double t0 = ctx.t0.tv_sec + ctx.t0.tv_nsec / 1e9;
-    double tE = ctx.tE.tv_sec + ctx.tE.tv_nsec / 1e9;
+    double t0 = gaki.t0.tv_sec + gaki.t0.tv_nsec / 1e9;
+    double tE = gaki.tE.tv_sec + gaki.tE.tv_nsec / 1e9;
     printff("\rt delta %f", tE-t0);
-    printff("\rframes %zu", ctx.frames);
-    printff("\r= %f fps / %f ms/frame", (double)ctx.frames/(double)(tE-t0), 1000.0*(double)(tE-t0)/ctx.frames);
+    printff("\rframes %zu", gaki.frames);
+    printff("\r= %f fps / %f ms/frame", (double)gaki.frames/(double)(tE-t0), 1000.0*(double)(tE-t0)/gaki.frames);
 #endif
 
     return 0;
