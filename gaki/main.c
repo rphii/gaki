@@ -8,18 +8,6 @@
 #include <rlwcwidth.h>
 #include <errno.h>
 
-void tui_fmt_clear_line(So *out, size_t n) {
-    if(n) {
-        so_fmt(out, "\x1b[s");
-        so_fmt(out, "%*s", n, "");
-        so_fmt(out, "\x1b[u");
-    }
-}
-
-typedef struct Fx {
-    unsigned char *col;
-} Fx;
-
 double timeval_d(struct timeval v) {
     return (double)v.tv_sec + (double)v.tv_usec * 1e-6;
 }
@@ -39,21 +27,6 @@ struct timespec timespec_add_timeval(struct timespec a, struct timeval b) {
     };
     struct timespec result = timespec_add_timespec(a, bt);
     return result;
-}
-
-void fmt_fx_on(So *out, Fx *fx) {
-    so_fmt(out, FS_BEG);
-    for(size_t i = 0; i < array_len(fx); ++i) {
-        Fx f = array_at(fx, i);
-        if(f.col) {
-            so_fmt(out, "%s", f.col);
-        }
-    }
-    so_push(out, 'm');
-}
-
-void fmt_fx_off(So *out) {
-    so_fmt(out, FS_BEG "0m");
 }
 
 
