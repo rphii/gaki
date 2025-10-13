@@ -1,6 +1,10 @@
 
 sources = [
-  'main.c'
+  'main.c',
+  'file-info.c',
+  'file-panel.c',
+  'gaki-state.c',
+  'gaki.c',
   ]
 
 rlc_dep = dependency('rlc', fallback : ['rlc', 'rlc_dep'], default_options: ['default_library=static'])
