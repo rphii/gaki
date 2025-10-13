@@ -57,7 +57,8 @@ void handle_resize(Gaki *gaki) {
         .y = w.ws_row,
     };
 
-    gaki->st.pt_dimension = dimension;
+    gaki->st.config.rc = (Tui_Rect){ .dim = dimension };
+
     tui_buffer_resize(&gaki->buffer, dimension);
 }
 
@@ -102,7 +103,7 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
             }
 
             if(gaki->input.id == INPUT_MOUSE) {
-                if(tui_rect_encloses_point(gaki->st.rc_files, gaki->input.mouse.pos)) {
+                if(tui_rect_encloses_point(gaki->st.layout.rc_files, gaki->input.mouse.pos)) {
                     if(gaki->input.mouse.scroll > 0) {
                         gaki->ac.select_down = 1;
                     } else if(gaki->input.mouse.scroll < 0) {
@@ -110,8 +111,8 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                     }
                 }
                 if(gaki->input.mouse.l) {
-                    if(tui_rect_encloses_point(gaki->st.rc_files, gaki->input.mouse.pos)) {
-                        Tui_Point pt = tui_rect_project_point(gaki->st.rc_files, gaki->input.mouse.pos);
+                    if(tui_rect_encloses_point(gaki->st.layout.rc_files, gaki->input.mouse.pos)) {
+                        Tui_Point pt = tui_rect_project_point(gaki->st.layout.rc_files, gaki->input.mouse.pos);
                         if(gaki->st.panel_file) {
                             gaki->st.panel_file->select = pt.y + gaki->st.panel_file->offset;
                         }
@@ -149,108 +150,6 @@ inline int fast_rand(void) {
     return (g_seed>>16)&0x7FFF;
 }
 int fast_rand(void);
-
-void render_file_infos(Gaki *gaki, Panel_File *panel_file, Tui_Rect rc) {
-    if(!panel_file) return;
-    So *tmp = &gaki->st.tmp;
-    /* draw file infos */
-    Tui_Color sel_bg = { .type = TUI_COLOR_8, .col8 = 7 };
-    Tui_Color sel_fg = { .type = TUI_COLOR_8, .col8 = 0 };
-    ssize_t dim_y = rc.dim.y;
-    rc.dim.y = 1;
-    for(size_t i = panel_file->offset; i < file_infos_length(panel_file->file_infos); ++i) {
-        if(i >= panel_file->offset + dim_y) break;
-        File_Info *info = file_infos_get_at(&panel_file->file_infos, i);
-        Tui_Color *fg = info->selected ? &sel_fg : 0;
-        Tui_Color *bg = info->selected ? &sel_bg : 0;
-        so_clear(tmp);
-        so_extend(tmp, info->filename);
-        so_push(tmp, '\n');
-        tui_buffer_draw(&gaki->buffer, rc, fg, bg, 0, *tmp);
-        ++rc.anc.y;
-    }
-}
-
-void render(Gaki *gaki) {
-    tui_buffer_clear(&gaki->buffer);
-    
-    Panel_Gaki *st = &gaki->st;
-    So *tmp = &st->tmp;
-    
-    /* draw file preview */
-#if 1
-    so_clear(tmp);
-    File_Info *current = 0;
-    for(size_t i = 0; st->panel_file && i < file_infos_length(st->panel_file->file_infos); ++i) {
-        File_Info *unsel = file_infos_get_at(&gaki->st.panel_file->file_infos, i);
-        unsel->selected = false;
-    }
-    if(st->panel_file && st->panel_file->select < file_infos_length(st->panel_file->file_infos)) {
-        current = file_infos_get_at(&gaki->st.panel_file->file_infos, st->panel_file->select);
-        current->selected = true;
-        if(S_ISREG(current->stats.st_mode)) {
-            if(!so_len(current->content)) {
-                so_file_read(current->path, &current->content);
-                current->printable = true;
-                for(size_t i = 0; i < so_len(current->content); ++i) {
-                    unsigned char c = so_at(current->content, i);
-                    if(!(c >= ' ' || isspace(c))) {
-                        current->printable = false;
-                        break;
-                    }
-                }
-                if(!current->printable) {
-                    so_free(&current->content);
-                }
-            }
-            if(current->printable) {
-                tui_buffer_draw(&gaki->buffer, st->rc_preview, 0, 0, 0, current->content);
-            }
-        } else if(S_ISDIR(current->stats.st_mode)) {
-            t_panel_file_ensure_exist(&st->t_file_infos, &current->panel_file, current->path);
-            current->printable = true;
-            render_file_infos(gaki, current->panel_file, st->rc_preview);
-        }
-    }
-#endif
-
-#if 1
-    /* draw vertical bar */
-    so_clear(tmp);
-    for(size_t i = 0; i < st->rc_split.dim.y; ++i) {
-        so_extend(tmp, so("│\n"));
-    }
-    tui_buffer_draw(&gaki->buffer, st->rc_split, 0, 0, 0, *tmp);
-
-    /* draw file infos */
-    render_file_infos(gaki, st->panel_file, st->rc_files);
-#endif
-
-    /* draw current dir/file/type */
-    Tui_Color bar_bg = { .type = TUI_COLOR_8, .col8 = 1 };
-    Tui_Color bar_fg = { .type = TUI_COLOR_8, .col8 = 7 };
-    Tui_Fx bar_fx = { .bold = true };
-    if(current) {
-        so_clear(tmp);
-        Tui_Rect rc_mode = st->rc_pwd;
-        if(S_ISDIR(current->stats.st_mode)) {
-            so_fmt(tmp, "[DIR]");
-            bar_bg.col8 = 4;
-        } else if(S_ISREG(current->stats.st_mode)) {
-            so_fmt(tmp, "[FILE]");
-            bar_bg.col8 = 5;
-        } else {
-            so_fmt(tmp, "[?]");
-        }
-        tui_buffer_draw(&gaki->buffer, st->rc_pwd, &bar_fg, &bar_bg, &bar_fx, current->path);
-        rc_mode.dim.x = tmp->len;
-        rc_mode.anc.x = gaki->buffer.dimension.x - rc_mode.dim.x;
-        tui_buffer_draw(&gaki->buffer, rc_mode, &bar_fg, &bar_bg, &bar_fx, *tmp);
-    } else {
-        tui_buffer_draw(&gaki->buffer, st->rc_pwd, &bar_fg, &bar_bg, &bar_fx, st->pwd);
-    }
-
-}
 
 Tui_Rect tui_rect(ssize_t anc_x, ssize_t anc_y, ssize_t dim_x, ssize_t dim_y) {
     return (Tui_Rect){
@@ -336,8 +235,11 @@ int main(void) {
     for(;;) {
         if(gaki.quit) break;
         handle_resize(&gaki);
+
         panel_gaki_update(&gaki.st, &gaki.ac);
-        render(&gaki);
+
+        tui_buffer_clear(&gaki.buffer);
+        panel_gaki_render(&gaki.buffer, &gaki.st);
 
 #if 1
         pthread_mutex_lock(&gaki.render_mtx);
