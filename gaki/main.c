@@ -40,11 +40,11 @@ void signal_winch(int x) {
 
     Gaki *gaki = gaki_global_get();
 
-    pthread_mutex_lock(&gaki->main_mtx);
+    //if(pthread_mutex_lock(&gaki->sync_main.mtx)) exit(1);
     gaki->resized = true;
-    gaki->main_update = true;
-    pthread_cond_signal(&gaki->main_cond);
-    pthread_mutex_unlock(&gaki->main_mtx);
+    //++gaki->sync_main.update_do;
+    pthread_cond_signal(&gaki->sync_main.cond);
+    //pthread_mutex_unlock(&gaki->sync_main.mtx);
 }
 
 void handle_resize(Gaki *gaki) {
@@ -131,10 +131,10 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                     resize_split = false;
                 }
             }
-            pthread_mutex_lock(&gaki->main_mtx);
-            gaki->main_update = true;
-            pthread_cond_signal(&gaki->main_cond);
-            pthread_mutex_unlock(&gaki->main_mtx);
+            pthread_mutex_lock(&gaki->sync_main.mtx);
+            ++gaki->sync_main.update_do;
+            pthread_cond_signal(&gaki->sync_main.cond);
+            pthread_mutex_unlock(&gaki->sync_main.mtx);
         }
     }
     return 0;
@@ -166,25 +166,27 @@ Tui_Rect tui_rect(ssize_t anc_x, ssize_t anc_y, ssize_t dim_x, ssize_t dim_y) {
 void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
     Gaki *gaki = void_ctx;
     So draw = SO;
-    while(!*quit) {
-        bool draw_do = false;
-        bool draw_busy = false;
 
-        pthread_mutex_lock(&gaki->draw_mtx);
-        draw_busy = gaki->draw_busy;
-        gaki->draw_do = false;
-        gaki->draw_busy = false;
-        if(!gaki->draw_busy) {
-            pthread_cond_wait(&gaki->draw_cond, &gaki->draw_mtx);
+    while(!*quit) {
+
+        pthread_mutex_lock(&gaki->sync_draw.mtx);
+        if(gaki->sync_draw.draw_done >= gaki->sync_draw.draw_do) {
+            gaki->sync_draw.draw_do = 0;
+            gaki->sync_draw.draw_done = 0;
         }
-        draw_do = gaki->draw_do;
-        pthread_mutex_unlock(&gaki->draw_mtx);
+        while(!gaki->sync_draw.draw_do && !gaki->sync_draw.draw_skip) {
+            pthread_cond_wait(&gaki->sync_draw.cond, &gaki->sync_draw.mtx);
+        }
+        bool draw_busy = gaki->sync_draw.draw_skip;
+        bool draw_do = gaki->sync_draw.draw_do;
+        gaki->sync_draw.draw_skip = 0;
+        pthread_mutex_unlock(&gaki->sync_draw.mtx);
 
         if(draw_busy) {
-            pthread_mutex_lock(&gaki->main_mtx);
-            gaki->main_update = true;
-            pthread_cond_signal(&gaki->main_cond);
-            pthread_mutex_unlock(&gaki->main_mtx);
+            pthread_mutex_lock(&gaki->sync_main.mtx);
+            ++gaki->sync_main.render_do;
+            pthread_cond_signal(&gaki->sync_main.cond);
+            pthread_mutex_unlock(&gaki->sync_main.mtx);
             continue;
         }
 
@@ -211,16 +213,24 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
             }
         }
         ++gaki->frames;
+
+        pthread_mutex_lock(&gaki->sync_draw.mtx);
+        ++gaki->sync_draw.draw_done;
+        pthread_mutex_unlock(&gaki->sync_draw.mtx);
     }
     return 0;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
 
     tui_enter();
 
     So out = SO;
-    Gaki gaki = { .resized = true, .main_update = true };
+    Gaki gaki = { .resized = true, .sync_main.update_do = true };
+
+    if(argc >= 2) {
+        gaki.panel_gaki.pwd = so_ensure_dir(so_clone(so_l(argv[1])));
+    }
 
     gaki_global_set(&gaki);
 
@@ -237,43 +247,89 @@ int main(void) {
     pw_init(&gaki.pw_task, 4);
     pw_dispatch(&gaki.pw_task);
 
+    gaki.panel_gaki.gaki = &gaki;
+
     fast_srand(time(0));
 
     //for(size_t i = 0; i < 1000; ++i) {
     clock_gettime(CLOCK_REALTIME, &gaki.t0);
-    for(;;) {
-        if(gaki.quit) break;
-        handle_resize(&gaki);
+    while(!gaki.quit) {
 
-        panel_gaki_update(&gaki.panel_gaki, &gaki.ac);
 
-        tui_buffer_clear(&gaki.buffer);
-        panel_gaki_render(&gaki.buffer, &gaki.panel_gaki);
+        //gaki.sync_draw.updated = false;
+        //gaki.sync_render.updated = false;
+        
+        pthread_mutex_lock(&gaki.sync_main.mtx);
+        bool update_do = gaki.sync_main.update_done < gaki.sync_main.update_do;
+        //printff("\rupdate do:%u",update_do);
+        pthread_mutex_unlock(&gaki.sync_main.mtx);
 
-#if 1
-        pthread_mutex_lock(&gaki.draw_mtx);
-        if(!gaki.draw_do) {
+        if(update_do) {
+            handle_resize(&gaki);
+            panel_gaki_update(&gaki.panel_gaki, &gaki.ac);
+
+            pthread_mutex_lock(&gaki.sync_main.mtx);
+            ++gaki.sync_main.update_done;
+            ++gaki.sync_main.render_do;
+            pthread_mutex_unlock(&gaki.sync_main.mtx);
+        }
+
+        pthread_mutex_lock(&gaki.sync_draw.mtx);
+        bool draw_busy = gaki.sync_draw.draw_done < gaki.sync_draw.draw_do;
+        //printff("\rdraw busy:%u",draw_busy);
+        if(draw_busy) {
+            ++gaki.sync_draw.draw_skip;
+        }
+        pthread_mutex_unlock(&gaki.sync_draw.mtx);
+
+        pthread_mutex_lock(&gaki.sync_main.mtx);
+        bool render_do = gaki.sync_main.render_done < gaki.sync_main.render_do;
+        //printff("\rrender do:%u",render_do);
+        if(draw_busy) {
+            gaki.sync_main.render_do = gaki.sync_main.render_done;
+        }
+        pthread_mutex_unlock(&gaki.sync_main.mtx);
+
+        if(render_do && !draw_busy) {
+            tui_buffer_clear(&gaki.buffer);
+            panel_gaki_render(&gaki.buffer, &gaki.panel_gaki);
+
+            pthread_mutex_lock(&gaki.sync_main.mtx);
+            ++gaki.sync_main.render_done;
+            pthread_mutex_unlock(&gaki.sync_main.mtx);
+
+            pthread_mutex_lock(&gaki.sync_draw.mtx);
+            ++gaki.sync_draw.draw_do;
             if(tui_point_cmp(gaki.screen.dimension, gaki.buffer.dimension)) {
                 tui_screen_resize(&gaki.screen, gaki.buffer.dimension);
             }
             memcpy(gaki.screen.now.cells, gaki.buffer.cells, sizeof(Tui_Cell) * gaki.buffer.dimension.x * gaki.buffer.dimension.y);
-            gaki.draw_do = true;
-        } else {
-            //printff("RENDER BUSY");exit(1);
-            gaki.draw_busy = true;
-        }
-        pthread_mutex_unlock(&gaki.draw_mtx);
-        pthread_cond_signal(&gaki.draw_cond);
-#endif
+            pthread_cond_signal(&gaki.sync_draw.cond);
+            pthread_mutex_unlock(&gaki.sync_draw.mtx);
 
-#if 1
-        pthread_mutex_lock(&gaki.main_mtx);
-        if(!gaki.main_update) {
-            //gaki.ac.select_down = 1;
-            pthread_cond_wait(&gaki.main_cond, &gaki.main_mtx);
         }
-        gaki.main_update = false;
-        pthread_mutex_unlock(&gaki.main_mtx);
+#if 1
+        pthread_mutex_lock(&gaki.sync_main.mtx);
+        if(gaki.sync_main.render_done >= gaki.sync_main.render_do) {
+            gaki.sync_main.render_do = 0;
+            gaki.sync_main.render_done = 0;
+        }
+        if(gaki.sync_main.update_done >= gaki.sync_main.update_do) {
+            gaki.sync_main.update_do = 0;
+            gaki.sync_main.update_done = 0;
+        }
+        while(!gaki.sync_main.update_do && !gaki.sync_main.render_do) {
+            //++gaki.sync_main.update_do;
+            //gaki.ac.select_down = 1;
+            if(gaki.resized) {
+                gaki.sync_main.update_do = true;
+                break;
+            } else {
+                pthread_cond_wait(&gaki.sync_main.cond, &gaki.sync_main.mtx);
+            }
+            //gaki.resized = true;
+        }
+        pthread_mutex_unlock(&gaki.sync_main.mtx);
 #endif
     }
 
@@ -284,7 +340,7 @@ int main(void) {
     so_free(&out);
     tui_exit();
 
-#if 0
+#if 1
     double t0 = gaki.t0.tv_sec + gaki.t0.tv_nsec / 1e9;
     double tE = gaki.tE.tv_sec + gaki.tE.tv_nsec / 1e9;
     printff("\rt delta %f", tE-t0);

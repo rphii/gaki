@@ -14,6 +14,7 @@ typedef struct File_Info {
     struct stat stats;
     size_t offset;
     bool selected;
+    bool have_read;
 } File_Info;
 
 VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, BASE);

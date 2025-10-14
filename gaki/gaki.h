@@ -6,6 +6,32 @@
 #include "panel-gaki.h"
 #include "action.h"
 
+#if 0
+typedef enum {
+    GAKI_IDLE,
+    GAKI_SCHEDULE,
+    GAKI_BUSY,
+    GAKI_DONE,
+} Gaki_List;
+#endif
+
+typedef struct Gaki_Sync_Main {
+    pthread_cond_t cond;
+    pthread_mutex_t mtx;
+    unsigned int update_do;
+    unsigned int update_done;
+    unsigned int render_do;
+    unsigned int render_done;
+} Gaki_Sync_Main;
+
+typedef struct Gaki_Sync_Draw {
+    pthread_cond_t cond;
+    pthread_mutex_t mtx;
+    unsigned int draw_do;
+    unsigned int draw_skip;
+    unsigned int draw_done;
+} Gaki_Sync_Draw;
+
 typedef struct Gaki {
     struct timespec t0;
     struct timespec tE;
@@ -15,15 +41,19 @@ typedef struct Gaki {
     Tui_Input input_prev;
     Tui_Screen screen;
     Tui_Buffer buffer;
+    // bool main_update;
+    // bool main_updated;
 
-    pthread_cond_t main_cond;
-    pthread_mutex_t main_mtx;
-    bool main_update;
+    Gaki_Sync_Main sync_main;
+    Gaki_Sync_Draw sync_draw;
+    //Gaki_Sync sync_render;
 
-    pthread_cond_t draw_cond;
-    pthread_mutex_t draw_mtx;
-    bool draw_do;
-    bool draw_busy;
+    // pthread_cond_t draw_cond;
+    // pthread_mutex_t draw_mtx;
+    // bool draw_dirty;
+    // Gaki_List draw_stage;
+    // // bool draw_do;
+    // // bool draw_busy;
 
     Pw pw_main;
     Pw pw_draw;
@@ -32,8 +62,13 @@ typedef struct Gaki {
     Panel_Gaki panel_gaki;
     Action ac;
 
-    bool resized;
+    _Atomic bool resized;
     bool quit;
+
+    // bool render;
+    // bool rendered;
+
+
 
 } Gaki;
 
