@@ -33,10 +33,7 @@ typedef struct Gaki {
     Pw pw_draw;
     Pw pw_task;
 
-    Panel_Gaki panel_gaki1;
-    Panel_Gaki panel_gaki2;
-    Panel_Gaki panel_gaki3;
-    Panel_Gaki panel_gaki4;
+    Panel_Gaki panel_gaki;
     Action ac;
 
     bool quit;

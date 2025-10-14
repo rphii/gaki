@@ -21,6 +21,7 @@ meson install -C build
 - vim-binds: `j` (down), `k` (up), `h` (left), `l` (right)
 - mouse support
 - sorted directory preview
+- resizable window
 
 ### SOON™
 
