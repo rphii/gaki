@@ -110,10 +110,10 @@ void *task_file_info_load_file(Pw *pw, bool *quit, void *void_task) {
         so_free(&content);
     }
 
-    pthread_mutex_lock(&task->gaki->panel_gaki1.rwlock);
+    pthread_mutex_lock(&task->gaki->panel_gaki.rwlock);
     task->current->content = content;
     task->current->printable = printable;
-    pthread_mutex_unlock(&task->gaki->panel_gaki1.rwlock);
+    pthread_mutex_unlock(&task->gaki->panel_gaki.rwlock);
 
     pthread_mutex_lock(&task->gaki->sync_main.mtx);
     ++task->gaki->sync_main.render_do;
@@ -138,10 +138,10 @@ void *task_panel_gaki_read_dir(Pw *pw, bool *quit, void *void_task) {
     File_Infos file_infos = {0};
     panel_file_read_sync(task->path, &file_infos);
 
-    pthread_mutex_lock(&task->gaki->panel_gaki1.rwlock);
+    pthread_mutex_lock(&task->gaki->panel_gaki.rwlock);
     *task->infos = file_infos;
     if(task->printable) *task->printable = true;
-    pthread_mutex_unlock(&task->gaki->panel_gaki1.rwlock);
+    pthread_mutex_unlock(&task->gaki->panel_gaki.rwlock);
 
     pthread_mutex_lock(&task->gaki->sync_main.mtx);
     ++task->gaki->sync_main.update_do;
@@ -164,10 +164,10 @@ void *task_panel_file_read_dir(Pw *pw, bool *quit, void *void_task) {
     Panel_File panel = {0};
     panel_file_read_sync(task->current->path, &panel.file_infos);
 
-    pthread_mutex_lock(&task->gaki->panel_gaki1.rwlock);
+    pthread_mutex_lock(&task->gaki->panel_gaki.rwlock);
     *task->current->panel_file = panel;
     task->current->printable = true;
-    pthread_mutex_unlock(&task->gaki->panel_gaki1.rwlock);
+    pthread_mutex_unlock(&task->gaki->panel_gaki.rwlock);
 
     pthread_mutex_lock(&task->gaki->sync_main.mtx);
     ++task->gaki->sync_main.update_do;
