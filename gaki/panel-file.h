@@ -9,7 +9,10 @@ typedef struct Panel_File {
     size_t offset;
     size_t select;
     So tmp;
+    bool read;
 } Panel_File;
+
+typedef struct Gaki Gaki;
 
 LUT_INCLUDE(T_Panel_File, t_panel_file, So, BY_REF, Panel_File, BY_REF);
 
