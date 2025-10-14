@@ -5,6 +5,7 @@
 
 #include "panel-gaki.h"
 #include "action.h"
+#include "gaki-sync.h"
 
 #if 0
 typedef enum {
@@ -15,23 +16,6 @@ typedef enum {
 } Gaki_List;
 #endif
 
-typedef struct Gaki_Sync_Main {
-    pthread_cond_t cond;
-    pthread_mutex_t mtx;
-    unsigned int update_do;
-    unsigned int update_done;
-    unsigned int render_do;
-    unsigned int render_done;
-} Gaki_Sync_Main;
-
-typedef struct Gaki_Sync_Draw {
-    pthread_cond_t cond;
-    pthread_mutex_t mtx;
-    unsigned int draw_do;
-    unsigned int draw_skip;
-    unsigned int draw_done;
-} Gaki_Sync_Draw;
-
 typedef struct Gaki {
     struct timespec t0;
     struct timespec tE;
@@ -41,19 +25,9 @@ typedef struct Gaki {
     Tui_Input input_prev;
     Tui_Screen screen;
     Tui_Buffer buffer;
-    // bool main_update;
-    // bool main_updated;
 
     Gaki_Sync_Main sync_main;
     Gaki_Sync_Draw sync_draw;
-    //Gaki_Sync sync_render;
-
-    // pthread_cond_t draw_cond;
-    // pthread_mutex_t draw_mtx;
-    // bool draw_dirty;
-    // Gaki_List draw_stage;
-    // // bool draw_do;
-    // // bool draw_busy;
 
     Pw pw_main;
     Pw pw_draw;
@@ -62,13 +36,9 @@ typedef struct Gaki {
     Panel_Gaki panel_gaki;
     Action ac;
 
-    _Atomic bool resized;
     bool quit;
 
-    // bool render;
-    // bool rendered;
-
-
+    _Atomic bool resized; // can't really use pthreads in a signal, so let's just do this one atomic... not perfect. should maybe re-visit one day
 
 } Gaki;
 

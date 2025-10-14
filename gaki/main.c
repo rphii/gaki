@@ -254,10 +254,6 @@ int main(int argc, char **argv) {
     //for(size_t i = 0; i < 1000; ++i) {
     clock_gettime(CLOCK_REALTIME, &gaki.t0);
     while(!gaki.quit) {
-
-
-        //gaki.sync_draw.updated = false;
-        //gaki.sync_render.updated = false;
         
         pthread_mutex_lock(&gaki.sync_main.mtx);
         bool update_do = gaki.sync_main.update_done < gaki.sync_main.update_do;
@@ -319,8 +315,12 @@ int main(int argc, char **argv) {
             gaki.sync_main.update_done = 0;
         }
         while(!gaki.sync_main.update_do && !gaki.sync_main.render_do) {
-            //++gaki.sync_main.update_do;
-            //gaki.ac.select_down = 1;
+#if 0
+            ++gaki.sync_main.update_do;
+            gaki.ac.select_down = 1;
+            gaki.ac.select_right = fast_rand() % 3;
+            gaki.ac.select_left = fast_rand() % 2;
+#endif
             if(gaki.resized) {
                 gaki.sync_main.update_do = true;
                 break;
