@@ -22,6 +22,7 @@ typedef struct Gaki {
     size_t frames;
 
     Tui_Input input;
+    Tui_Input input_curr;
     Tui_Input input_prev;
     Tui_Screen screen;
     Tui_Buffer buffer;

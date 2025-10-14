@@ -75,12 +75,12 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
     Gaki *gaki = void_ctx;
     bool resize_split = false;
     for(;;) {
-        gaki->input_prev = gaki->input;
+        gaki->input_prev = gaki->input_curr;
         //printff("getting input..\r");
         if(gaki->quit) break;
-        if(tui_input_process(&gaki->input)) {
-            if(gaki->input.id == INPUT_TEXT && gaki->input.text.len == 1) {
-                switch(gaki->input.text.str[0]) {
+        if(tui_input_process(&gaki->input_curr)) {
+            if(gaki->input_curr.id == INPUT_TEXT && gaki->input_curr.text.len == 1) {
+                switch(gaki->input_curr.text.str[0]) {
                     case 'q': gaki->quit = true; break;
                     case 'j': gaki->ac.select_down = 1; break;
                     case 'k': gaki->ac.select_up = 1; break;
@@ -90,40 +90,40 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                     default: break;
                 }
             }
-            if(gaki->input.id == INPUT_KEY) {
-                if(gaki->input.key == KEY_UP) {
+            if(gaki->input_curr.id == INPUT_KEY) {
+                if(gaki->input_curr.key == KEY_UP) {
                     gaki->ac.select_up = 1;
                 }
-                if(gaki->input.key == KEY_DOWN) {
+                if(gaki->input_curr.key == KEY_DOWN) {
                     gaki->ac.select_down = 1;
                 }
-                if(gaki->input.key == KEY_LEFT) {
+                if(gaki->input_curr.key == KEY_LEFT) {
                     gaki->ac.select_left = 1;
                 }
-                if(gaki->input.key == KEY_RIGHT) {
+                if(gaki->input_curr.key == KEY_RIGHT) {
                     gaki->ac.select_right = 1;
                 }
             }
 
-            if(gaki->input.id == INPUT_MOUSE) {
-                if(tui_rect_encloses_point(gaki->panel_gaki.layout.rc_files, gaki->input.mouse.pos)) {
-                    if(gaki->input.mouse.scroll > 0) {
+            if(gaki->input_curr.id == INPUT_MOUSE) {
+                if(tui_rect_encloses_point(gaki->panel_gaki.layout.rc_files, gaki->input_curr.mouse.pos)) {
+                    if(gaki->input_curr.mouse.scroll > 0) {
                         gaki->ac.select_down = 1;
-                    } else if(gaki->input.mouse.scroll < 0) {
+                    } else if(gaki->input_curr.mouse.scroll < 0) {
                         gaki->ac.select_up = 1;
                     }
                 }
-                if(gaki->input.mouse.l) {
-                    if(tui_rect_encloses_point(gaki->panel_gaki.layout.rc_files, gaki->input.mouse.pos)) {
-                        Tui_Point pt = tui_rect_project_point(gaki->panel_gaki.layout.rc_files, gaki->input.mouse.pos);
+                if(gaki->input_curr.mouse.l) {
+                    if(tui_rect_encloses_point(gaki->panel_gaki.layout.rc_files, gaki->input_curr.mouse.pos)) {
+                        Tui_Point pt = tui_rect_project_point(gaki->panel_gaki.layout.rc_files, gaki->input_curr.mouse.pos);
                         if(gaki->panel_gaki.panel_file) {
                             gaki->panel_gaki.panel_file->select = pt.y + gaki->panel_gaki.panel_file->offset;
                         }
                     }
                 }
-                if(gaki->input.mouse.m) {
+                if(gaki->input_curr.mouse.m) {
                 }
-                if(gaki->input.mouse.r) {
+                if(gaki->input_curr.mouse.r) {
                     if(!gaki->input_prev.mouse.r) {
                     }
                     if(resize_split) {
@@ -133,6 +133,7 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                 }
             }
             pthread_mutex_lock(&gaki->sync_main.mtx);
+            gaki->input = gaki->input_curr;
             ++gaki->sync_main.update_do;
             pthread_cond_signal(&gaki->sync_main.cond);
             pthread_mutex_unlock(&gaki->sync_main.mtx);
