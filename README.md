@@ -1,6 +1,6 @@
 # gaki
 
-Minmal file viewer, inspired by `mc`, `ranger`, `yazi` or similar.
+Minmal TUI directory browser, inspired by `mc`, `ranger`, `yazi` or similar.
 
 ## 📦 Install
 ```shell
