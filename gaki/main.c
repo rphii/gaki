@@ -133,7 +133,6 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                 }
             }
             pthread_mutex_lock(&gaki->sync_main.mtx);
-            gaki->input = gaki->input_curr;
             ++gaki->sync_main.update_do;
             pthread_cond_signal(&gaki->sync_main.cond);
             pthread_mutex_unlock(&gaki->sync_main.mtx);

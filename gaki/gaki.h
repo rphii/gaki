@@ -21,7 +21,6 @@ typedef struct Gaki {
     struct timespec tE;
     size_t frames;
 
-    Tui_Input input;
     Tui_Input input_curr;
     Tui_Input input_prev;
     Tui_Screen screen;
