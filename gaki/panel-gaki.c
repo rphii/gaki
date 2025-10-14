@@ -96,9 +96,9 @@ void *task_file_info_load_file(Pw *pw, bool *quit, void *void_task) {
     Task_File_Info_Load_File *task = void_task;
 
     So content = SO;
-    bool printable = true;
 
     so_file_read(task->current->path, &content);
+    bool printable = so_len(content);
     for(size_t i = 0; i < so_len(content); ++i) {
         unsigned char c = so_at(content, i);
         if(!(c >= ' ' || isspace(c))) {
@@ -115,10 +115,12 @@ void *task_file_info_load_file(Pw *pw, bool *quit, void *void_task) {
     task->current->printable = printable;
     pthread_mutex_unlock(&task->gaki->panel_gaki.rwlock);
 
-    pthread_mutex_lock(&task->gaki->sync_main.mtx);
-    ++task->gaki->sync_main.render_do;
-    pthread_cond_signal(&task->gaki->sync_main.cond);
-    pthread_mutex_unlock(&task->gaki->sync_main.mtx);
+    if(printable) {
+        pthread_mutex_lock(&task->gaki->sync_main.mtx);
+        ++task->gaki->sync_main.render_do;
+        pthread_cond_signal(&task->gaki->sync_main.cond);
+        pthread_mutex_unlock(&task->gaki->sync_main.mtx);
+    }
 
     free(task);
     return 0;
@@ -137,16 +139,19 @@ void *task_panel_gaki_read_dir(Pw *pw, bool *quit, void *void_task) {
 
     File_Infos file_infos = {0};
     panel_file_read_sync(task->path, &file_infos);
+    bool printable = file_infos_length(file_infos);
 
     pthread_mutex_lock(&task->gaki->panel_gaki.rwlock);
     *task->infos = file_infos;
-    if(task->printable) *task->printable = true;
+    if(task->printable) *task->printable = printable;
     pthread_mutex_unlock(&task->gaki->panel_gaki.rwlock);
 
-    pthread_mutex_lock(&task->gaki->sync_main.mtx);
-    ++task->gaki->sync_main.update_do;
-    pthread_cond_signal(&task->gaki->sync_main.cond);
-    pthread_mutex_unlock(&task->gaki->sync_main.mtx);
+    if(printable) {
+        pthread_mutex_lock(&task->gaki->sync_main.mtx);
+        ++task->gaki->sync_main.update_do;
+        pthread_cond_signal(&task->gaki->sync_main.cond);
+        pthread_mutex_unlock(&task->gaki->sync_main.mtx);
+    }
 
     free(task);
     return 0;
