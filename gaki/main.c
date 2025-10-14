@@ -340,7 +340,7 @@ int main(int argc, char **argv) {
     so_free(&out);
     tui_exit();
 
-#if 1
+#if 0
     double t0 = gaki.t0.tv_sec + gaki.t0.tv_nsec / 1e9;
     double tE = gaki.tE.tv_sec + gaki.tE.tv_nsec / 1e9;
     printff("\rt delta %f", tE-t0);
