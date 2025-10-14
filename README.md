@@ -19,6 +19,7 @@ meson install -C build
 - 10k+ fps
 - remembers the selected index when browsing the directory tree
 - vim-binds: `j` (down), `k` (up), `h` (left), `l` (right)
+- mouse support
 - sorted directory preview
 
 ### SOON™
