@@ -255,17 +255,16 @@ void panel_gaki_update(Panel_Gaki *st, Action *ac) {
                 pthread_cond_signal(&st->gaki->sync_input.cond);
                 pthread_mutex_unlock(&st->gaki->sync_input.mtx);
 
-                /* force update */
-                pthread_mutex_lock(&st->gaki->sync_main.mtx);
-                ++st->gaki->sync_main.update_do;
-                pthread_cond_signal(&st->gaki->sync_main.cond);
-                pthread_mutex_unlock(&st->gaki->sync_main.mtx);
-
                 /* issue a redraw */
                 pthread_mutex_lock(&st->gaki->sync_draw.mtx);
                 ++st->gaki->sync_draw.draw_redraw;
                 pthread_mutex_unlock(&st->gaki->sync_draw.mtx);
 
+                /* force update */
+                pthread_mutex_lock(&st->gaki->sync_main.mtx);
+                ++st->gaki->sync_main.update_do;
+                pthread_cond_signal(&st->gaki->sync_main.cond);
+                pthread_mutex_unlock(&st->gaki->sync_main.mtx);
 
 #if 0
                     so_fmt(&ed, " '%.*s'", SO_F(sel->path));
