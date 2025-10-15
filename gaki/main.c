@@ -195,7 +195,6 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
         gaki->sync_draw.draw_skip = 0;
         if(draw_do && !draw_busy && draw_redraw) {
             gaki->sync_draw.draw_redraw = 0;
-            memset(gaki->screen.old.cells, 0, sizeof(Tui_Cell) * gaki->buffer.dimension.x * gaki->buffer.dimension.y);
         }
         pthread_mutex_unlock(&gaki->sync_draw.mtx);
 
