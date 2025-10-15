@@ -17,7 +17,14 @@ typedef struct Gaki_Sync_Draw {
     unsigned int draw_do;
     unsigned int draw_skip;
     unsigned int draw_done;
+    unsigned int draw_redraw;
 } Gaki_Sync_Draw;
+
+typedef struct Gaki_Sync_Input {
+    pthread_cond_t cond;
+    pthread_mutex_t mtx;
+    unsigned int idle;
+} Gaki_Sync_Input;
 
 #define GAKI_SYNC_H
 #endif

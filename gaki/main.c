@@ -59,8 +59,13 @@ void handle_resize(Gaki *gaki) {
         .y = w.ws_row,
     };
 
-    gaki->panel_gaki.config.rc = (Tui_Rect){ .dim = dimension };
+    Tui_Point dimension_prev = gaki->panel_gaki.config.rc.dim;
 
+    if(!tui_point_cmp(dimension_prev, dimension)) {
+        return;
+    }
+
+    gaki->panel_gaki.config.rc = (Tui_Rect){ .dim = dimension };
     tui_buffer_resize(&gaki->buffer, dimension);
 }
 
@@ -77,6 +82,12 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
     for(;;) {
         gaki->input_prev = gaki->input_curr;
         //printff("getting input..\r");
+        pthread_mutex_lock(&gaki->sync_input.mtx);
+        while(gaki->sync_input.idle) {
+            pthread_cond_wait(&gaki->sync_input.cond, &gaki->sync_input.mtx);
+        }
+        pthread_mutex_unlock(&gaki->sync_input.mtx);
+
         if(gaki->quit) break;
         if(tui_input_process(&gaki->input_curr)) {
             if(gaki->input_curr.id == INPUT_TEXT && gaki->input_curr.text.len == 1) {
@@ -180,7 +191,12 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
         }
         bool draw_busy = gaki->sync_draw.draw_skip;
         bool draw_do = gaki->sync_draw.draw_do;
+        bool draw_redraw = gaki->sync_draw.draw_redraw;
         gaki->sync_draw.draw_skip = 0;
+        if(draw_do && !draw_busy && draw_redraw) {
+            gaki->sync_draw.draw_redraw = 0;
+            memset(gaki->screen.old.cells, 0, sizeof(Tui_Cell) * gaki->buffer.dimension.x * gaki->buffer.dimension.y);
+        }
         pthread_mutex_unlock(&gaki->sync_draw.mtx);
 
         if(draw_busy) {
@@ -194,6 +210,12 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
         if(!draw_do) continue;
 
         so_clear(&draw);
+
+        if(draw_redraw) {
+            memset(gaki->screen.old.cells, 0, sizeof(Tui_Cell) * gaki->buffer.dimension.x * gaki->buffer.dimension.y);
+            so_extend(&draw, so(TUI_ESC_CODE_CURSOR_HIDE));
+        }
+
         tui_screen_fmt(&draw, &gaki->screen);
 
         ssize_t len = draw.len;

@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <dirent.h>
+#include <sys/wait.h>
 
 #include "panel-gaki.h"
 #include "gaki.h"
@@ -209,10 +210,63 @@ void panel_gaki_update(Panel_Gaki *st, Action *ac) {
                 st->panel_file = 0;
 
             } else if(S_ISREG(sel->stats.st_mode)) {
+
                 So ed = SO;
-                char *ced = 0;
                 so_env_get(&ed, so("EDITOR"));
-                if(so_len(ed)) {
+                if(!so_len(ed)) {
+                    // TODO make some kind of notice
+                    printff("\rNO EDITOR FOUND");
+                    exit(1);
+                }
+
+                /* pause input */
+                pthread_mutex_lock(&st->gaki->sync_input.mtx);
+                st->gaki->sync_input.idle = true;
+                pthread_mutex_unlock(&st->gaki->sync_input.mtx);
+
+                pid_t pid = fork();
+                if(pid < 0) {
+                    // TODO make some kind of notice
+                    printff("\rFORK FAILED");
+                    exit(1);
+                } else if(!pid) {
+                    char *ced = so_dup(ed);
+                    char *cpath = so_dup(sel->path);
+                    char *cargs[] = { ced, cpath, 0 };
+                    system("tput rmcup");
+                    execvp(ced, cargs);
+                    _exit(EXIT_FAILURE);
+                }
+
+                int status;
+                waitpid(pid, &status, 0);
+
+                if(status) {
+                    // TODO make some kind of notice
+                    printff("\rCHILD FAILED");
+                    exit(1);
+                }
+
+                system("tput smcup");
+
+                /* resume input */
+                pthread_mutex_lock(&st->gaki->sync_input.mtx);
+                st->gaki->sync_input.idle = false;
+                pthread_cond_signal(&st->gaki->sync_input.cond);
+                pthread_mutex_unlock(&st->gaki->sync_input.mtx);
+
+                /* force update */
+                pthread_mutex_lock(&st->gaki->sync_main.mtx);
+                ++st->gaki->sync_main.update_do;
+                pthread_cond_signal(&st->gaki->sync_main.cond);
+                pthread_mutex_unlock(&st->gaki->sync_main.mtx);
+
+                /* issue a redraw */
+                pthread_mutex_lock(&st->gaki->sync_draw.mtx);
+                ++st->gaki->sync_draw.draw_redraw;
+                pthread_mutex_unlock(&st->gaki->sync_draw.mtx);
+
+
 #if 0
                     so_fmt(&ed, " '%.*s'", SO_F(sel->path));
                     ced = so_dup(ed);
@@ -220,12 +274,7 @@ void panel_gaki_update(Panel_Gaki *st, Action *ac) {
                     system(ced);
                     tui_enter();
 #endif
-                } else {
-                    printff("\rNO EDITOR FOUND");
-                    exit(1);
-                }
                 so_free(&ed);
-                free(ced);
             }
         }
     }
