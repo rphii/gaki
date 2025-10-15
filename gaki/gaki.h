@@ -28,6 +28,7 @@ typedef struct Gaki {
 
     Gaki_Sync_Main sync_main;
     Gaki_Sync_Draw sync_draw;
+    Gaki_Sync_Input sync_input;
 
     Pw pw_main;
     Pw pw_draw;
