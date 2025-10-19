@@ -4,8 +4,10 @@
 #include <rltui.h>
 #include <rlpw.h>
 
-#include "panel-file.h"
+#include "panel-directory.h"
 #include "action.h"
+
+typedef struct Gaki Gaki;
 
 typedef struct Panel_Gaki_Layout {
     Tui_Rect rc_files;
@@ -21,20 +23,16 @@ typedef struct Panel_Gaki_Config {
 typedef struct Panel_Gaki {
     Panel_Gaki_Config config;
     Panel_Gaki_Layout layout;
-    struct Gaki *gaki;
-    So tmp;
-    So pwd;
-    Panel_File *panel_file;
-    T_Panel_File t_file_infos;
-    pthread_mutex_t rwlock;
+    Panel_Directory directory;
+    So path;
 } Panel_Gaki;
 
 void panel_gaki_select_up(Panel_Gaki *st, size_t n);
 void panel_gaki_select_down(Panel_Gaki *st, size_t n);
 void panel_gaki_select_at(Panel_Gaki *st, size_t n);
-void panel_gaki_update(Panel_Gaki *st, Action *ac);
+void panel_gaki_update(Gaki *gaki, Panel_Gaki *st, Action *ac);
 
-void panel_gaki_render(Tui_Buffer *buffer, Panel_Gaki *st);
+void panel_gaki_render(Gaki *gaki, Tui_Buffer *buffer, Panel_Gaki *st);
 
 #define GAKI_STATE_H
 #endif

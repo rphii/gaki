@@ -1,14 +1,16 @@
+#if 0
 #include <dirent.h> 
 
 #include "panel-file.h"
 #include "gaki.h"
 
-LUT_IMPLEMENT(T_Panel_File, t_panel_file, So, BY_REF, Panel_File, BY_REF, so_hash_p, so_cmp_p, 0, panel_file_free);
+//LUT_IMPLEMENT(T_Panel_File, t_panel_file, So, BY_REF, Panel_File, BY_REF, so_hash_p, so_cmp_p, 0, panel_file_free);
 
 void panel_file_free(Panel_File *panel) {
 
 }
 
+#if 0
 void t_panel_file_ensure_exist(T_Panel_File *t, Panel_File **out, So path) {
     Panel_File *panel = t_panel_file_get(t, &path);
     if(!panel) {
@@ -17,10 +19,11 @@ void t_panel_file_ensure_exist(T_Panel_File *t, Panel_File **out, So path) {
     }
     *out = panel;
 }
+#endif
 
 void panel_file_render(Tui_Buffer *buffer, Tui_Rect rc, Panel_File *panel_file) {
     if(!panel_file) return;
-    So *tmp = &panel_file->tmp;
+    So tmp = SO;
     /* draw file infos */
     Tui_Color sel_bg = { .type = TUI_COLOR_8, .col8 = 7 };
     Tui_Color sel_fg = { .type = TUI_COLOR_8, .col8 = 0 };
@@ -31,12 +34,14 @@ void panel_file_render(Tui_Buffer *buffer, Tui_Rect rc, Panel_File *panel_file) 
         File_Info *info = file_infos_get_at(&panel_file->file_infos, i);
         Tui_Color *fg = info->selected ? &sel_fg : 0;
         Tui_Color *bg = info->selected ? &sel_bg : 0;
-        so_clear(tmp);
-        so_extend(tmp, info->filename);
-        so_push(tmp, '\n');
-        tui_buffer_draw(buffer, rc, fg, bg, 0, *tmp);
+        so_clear(&tmp);
+        so_extend(&tmp, so_get_basename(info->path));
+        so_push(&tmp, '\n');
+        tui_buffer_draw(buffer, rc, fg, bg, 0, tmp);
         ++rc.anc.y;
     }
+    so_free(&tmp);
 }
 
+#endif
 

@@ -3,22 +3,20 @@
 #include <rlso.h>
 #include <sys/stat.h>
 
-typedef struct File_Info {
-    bool printable;
-    So filename;
-    So path;
-    union {
-        So content;
-        struct Panel_File *panel_file;
-    };
-    struct stat stats;
-    size_t offset;
-    bool selected;
-    bool have_read;
-} File_Info;
+typedef struct File_Info File_Info;
 
 VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, BASE);
 VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, SORT);
+LUT_INCLUDE(T_File_Info, t_file_info, So, BY_VAL, File_Info, BY_REF);
+
+typedef struct File_Info {
+    So path;
+    struct stat stats;
+    union {
+        So text;
+        File_Infos *files;
+    } content;
+} File_Info;
 
 int file_info_cmp(File_Info *a, File_Info *b);
 void file_info_free(File_Info *a);

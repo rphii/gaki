@@ -3,35 +3,38 @@
 #include <sys/wait.h>
 
 #include "panel-gaki.h"
+#include "panel-file.h"
 #include "gaki.h"
 
-void panel_gaki_select_up(Panel_Gaki *st, size_t n) {
-    if(!st->panel_file) return;
-    if(!st->panel_file->select) {
-        st->panel_file->select = file_infos_length(st->panel_file->file_infos) - 1;
-        st->panel_file->offset = st->panel_file->select + 1 > st->layout.rc_files.dim.y ? st->panel_file->select + 1 - st->layout.rc_files.dim.y : 0;
+#if 0
+void panel_gaki_select_up(Panel_Gaki *panel, size_t n) {
+    if(!panel->panel_file) return;
+    if(!panel->panel_file->select) {
+        panel->panel_file->select = file_infos_length(panel->panel_file->file_infos) - 1;
+        panel->panel_file->offset = panel->panel_file->select + 1 > panel->layout.rc_files.dim.y ? panel->panel_file->select + 1 - panel->layout.rc_files.dim.y : 0;
     } else {
-        --st->panel_file->select;
-        if(st->panel_file->offset) {
-            --st->panel_file->offset;
+        --panel->panel_file->select;
+        if(panel->panel_file->offset) {
+            --panel->panel_file->offset;
         }
     }
 }
 
-void panel_gaki_select_down(Panel_Gaki *st, size_t n) {
-    if(!st->panel_file) return;
-    ++st->panel_file->select;
-    if(st->panel_file->select >= file_infos_length(st->panel_file->file_infos)) {
-        st->panel_file->select = 0;
-        st->panel_file->offset = 0;
+void panel_gaki_select_down(Panel_Gaki *panel, size_t n) {
+    if(!panel->panel_file) return;
+    ++panel->panel_file->select;
+    if(panel->panel_file->select >= file_infos_length(panel->panel_file->file_infos)) {
+        panel->panel_file->select = 0;
+        panel->panel_file->offset = 0;
     }
-    if(st->panel_file->select >= st->panel_file->offset + st->layout.rc_files.dim.y) {
-        ++st->panel_file->offset;
+    if(panel->panel_file->select >= panel->panel_file->offset + panel->layout.rc_files.dim.y) {
+        ++panel->panel_file->offset;
     }
 }
 
-void panel_gaki_select_at(Panel_Gaki *st, size_t n) {
+void panel_gaki_select_at(Panel_Gaki *panel, size_t n) {
 }
+#endif
 
 void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *config) {
 
@@ -63,29 +66,33 @@ void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *
     layout->rc_preview.dim.x = config->rc.dim.x - layout->rc_files.dim.x - 1;
 }
 
-int panel_file_read_sync(So path, File_Infos *file_infos) {
+#if 0
+int panel_file_read_sync(T_Panel_File *panels, So path, File_Infos *file_infos) {
     DIR *d;
     struct dirent *dir;
     char *cdirname = so_dup(path);
-    char *cfilename = 0;
+    char *cpath = 0;
     d = opendir(cdirname);
     if (d) {
         while ((dir = readdir(d)) != NULL) {
             if(dir->d_name[0] == '.') continue;
             File_Info info = {0};
-            info.filename = so_clone(so_l(dir->d_name));
-            so_path_join(&info.path, path, info.filename);
-            cfilename = so_dup(info.path);
-            stat(cfilename, &info.stats);
+            so_path_join(&info.path, path, so_l(dir->d_name));
+            cpath = so_dup(info.path);
+            stat(cpath, &info.stats);
+            if(S_ISDIR(info.stats.st_mode)) {
+                t_panel_file_ensure_exist(panels, &info.panel_file, info.path);
+            }
             file_infos_push_back(file_infos, &info);
         }
         closedir(d);
     }
     free(cdirname);
-    free(cfilename);
+    free(cpath);
     file_infos_sort(file_infos);
     return(0);
 }
+#endif
 
 
 typedef struct Task_File_Info_Load_File {
@@ -111,10 +118,10 @@ void *task_file_info_load_file(Pw *pw, bool *quit, void *void_task) {
         so_free(&content);
     }
 
-    pthread_mutex_lock(&task->gaki->panel_gaki.rwlock);
-    task->current->content = content;
-    task->current->printable = printable;
-    pthread_mutex_unlock(&task->gaki->panel_gaki.rwlock);
+    pthread_mutex_lock(&task->gaki->sync_panel.mtx);
+    //task->current->content = content;
+    //task->current->printable = printable;
+    pthread_mutex_unlock(&task->gaki->sync_panel.mtx);
 
     if(printable) {
         pthread_mutex_lock(&task->gaki->sync_main.mtx);
@@ -128,23 +135,27 @@ void *task_file_info_load_file(Pw *pw, bool *quit, void *void_task) {
 }
 
 typedef struct Task_Panel_Gaki_Read_Dir {
-    //Panel_Gaki *current;
-    File_Infos *infos;
     So path;
     Gaki *gaki;
-    bool *printable;
 } Task_Panel_Gaki_Read_Dir;
 
 void *task_panel_gaki_read_dir(Pw *pw, bool *quit, void *void_task) {
     Task_Panel_Gaki_Read_Dir *task = void_task;
 
-    File_Infos file_infos = {0};
-    panel_file_read_sync(task->path, &file_infos);
-    bool printable = file_infos_length(file_infos);
+#if 0
+    Panel_File *panel = 0;
+    bool printable = false;
+
+#if 0
+    t_panel_file_ensure_exist(&task->gaki->t_panels, &panel, task->path);
+    if(!panel->have_read) {
+        panel->have_read = true;
+        panel_file_read_sync(&task->gaki->t_panels, task->path, &panel->file_infos);
+        printable = file_infos_length(panel->file_infos);
+    }
+#endif
 
     pthread_mutex_lock(&task->gaki->panel_gaki.rwlock);
-    *task->infos = file_infos;
-    if(task->printable) *task->printable = printable;
     pthread_mutex_unlock(&task->gaki->panel_gaki.rwlock);
 
     if(printable) {
@@ -153,6 +164,7 @@ void *task_panel_gaki_read_dir(Pw *pw, bool *quit, void *void_task) {
         pthread_cond_signal(&task->gaki->sync_main.cond);
         pthread_mutex_unlock(&task->gaki->sync_main.mtx);
     }
+#endif
 
     free(task);
     return 0;
@@ -167,13 +179,15 @@ typedef struct Task_File_Info_Read_Dir {
 void *task_panel_file_read_dir(Pw *pw, bool *quit, void *void_task) {
     Task_File_Info_Read_Dir *task = void_task;
 
-    Panel_File panel = {0};
-    panel_file_read_sync(task->current->path, &panel.file_infos);
+    //Panel_File panel = {0};
+#if 0
+    panel_file_read_sync(&task->gaki->t_panels, task->current->path, &panel.file_infos);
 
     pthread_mutex_lock(&task->gaki->panel_gaki.rwlock);
     *task->current->panel_file = panel;
     task->current->printable = true;
     pthread_mutex_unlock(&task->gaki->panel_gaki.rwlock);
+#endif
 
     pthread_mutex_lock(&task->gaki->sync_main.mtx);
     ++task->gaki->sync_main.update_do;
@@ -185,29 +199,29 @@ void *task_panel_file_read_dir(Pw *pw, bool *quit, void *void_task) {
 }
 
 
-void panel_gaki_update(Panel_Gaki *st, Action *ac) {
+void panel_gaki_update(Gaki *gaki, Panel_Gaki *panel, Action *ac) {
 
-    pthread_mutex_lock(&st->rwlock);
+    pthread_mutex_lock(&panel->rwlock);
 
-    panel_gaki_layout_from_rules(&st->layout, &st->config);
+    panel_gaki_layout_from_rules(&panel->layout, &panel->config);
 
     if(ac->select_left) {
-        So left = so_ensure_dir(so_rsplit_ch(st->pwd, PLATFORM_CH_SUBDIR, 0));
+        So left = so_ensure_dir(so_rsplit_ch(panel->path, PLATFORM_CH_SUBDIR, 0));
         if(left.len) {
-            st->pwd = left;
-            st->panel_file = 0;
+            panel->path = left;
+            panel->panel_file = 0;
         } else {
-            so_copy(&st->pwd, so("/"));
-            st->panel_file = 0;
+            so_copy(&panel->path, so("/"));
+            panel->panel_file = 0;
         }
     }
 
-    if(ac->select_right && st->panel_file) {
-        if(st->panel_file->select < file_infos_length(st->panel_file->file_infos)) {
-            File_Info *sel = file_infos_get_at(&st->panel_file->file_infos, st->panel_file->select);
+    if(ac->select_right && panel->panel_file) {
+        if(panel->panel_file->select < file_infos_length(panel->panel_file->file_infos)) {
+            File_Info *sel = file_infos_get_at(&panel->panel_file->file_infos, panel->panel_file->select);
             if(S_ISDIR(sel->stats.st_mode)) {
-                so_path_join(&st->pwd, st->pwd, sel->filename);
-                st->panel_file = 0;
+                so_path_join(&panel->path, panel->path, so_get_basename(sel->path));
+                panel->panel_file = 0;
 
             } else if(S_ISREG(sel->stats.st_mode)) {
 
@@ -220,9 +234,9 @@ void panel_gaki_update(Panel_Gaki *st, Action *ac) {
                 }
 
                 /* pause input */
-                pthread_mutex_lock(&st->gaki->sync_input.mtx);
-                st->gaki->sync_input.idle = true;
-                pthread_mutex_unlock(&st->gaki->sync_input.mtx);
+                pthread_mutex_lock(&gaki->sync_input.mtx);
+                gaki->sync_input.idle = true;
+                pthread_mutex_unlock(&gaki->sync_input.mtx);
 
                 pid_t pid = fork();
                 if(pid < 0) {
@@ -250,21 +264,21 @@ void panel_gaki_update(Panel_Gaki *st, Action *ac) {
                 system("tput smcup");
 
                 /* resume input */
-                pthread_mutex_lock(&st->gaki->sync_input.mtx);
-                st->gaki->sync_input.idle = false;
-                pthread_cond_signal(&st->gaki->sync_input.cond);
-                pthread_mutex_unlock(&st->gaki->sync_input.mtx);
+                pthread_mutex_lock(&gaki->sync_input.mtx);
+                gaki->sync_input.idle = false;
+                pthread_cond_signal(&gaki->sync_input.cond);
+                pthread_mutex_unlock(&gaki->sync_input.mtx);
 
                 /* issue a redraw */
-                pthread_mutex_lock(&st->gaki->sync_draw.mtx);
-                ++st->gaki->sync_draw.draw_redraw;
-                pthread_mutex_unlock(&st->gaki->sync_draw.mtx);
+                pthread_mutex_lock(&gaki->sync_draw.mtx);
+                ++gaki->sync_draw.draw_redraw;
+                pthread_mutex_unlock(&gaki->sync_draw.mtx);
 
                 /* force update */
-                pthread_mutex_lock(&st->gaki->sync_main.mtx);
-                ++st->gaki->sync_main.update_do;
-                pthread_cond_signal(&st->gaki->sync_main.cond);
-                pthread_mutex_unlock(&st->gaki->sync_main.mtx);
+                pthread_mutex_lock(&gaki->sync_main.mtx);
+                ++gaki->sync_main.update_do;
+                pthread_cond_signal(&gaki->sync_main.cond);
+                pthread_mutex_unlock(&gaki->sync_main.mtx);
 
 #if 0
                     so_fmt(&ed, " '%.*s'", SO_F(sel->path));
@@ -278,109 +292,104 @@ void panel_gaki_update(Panel_Gaki *st, Action *ac) {
         }
     }
 
-    if(!so_len(st->pwd)) {
-        so_env_get(&st->pwd, so("PWD"));
+    if(!so_len(panel->path)) {
+        so_env_get(&panel->path, so("PWD"));
     }
 
-    if(!st->panel_file) {
-        t_panel_file_ensure_exist(&st->t_file_infos, &st->panel_file, st->pwd);
+    if(!panel->panel_file) {
+#if 0
+        t_panel_file_ensure_exist(&gaki->t_panels, &panel->panel_file, panel->path);
 
-        if(!st->panel_file->read) {
-            st->panel_file->read = true;
+        if(!panel->panel_file->have_read) {
+            panel->panel_file->have_read = true;
 
             Task_Panel_Gaki_Read_Dir *task;
             NEW(Task_Panel_Gaki_Read_Dir, task);
-            task->gaki = st->gaki;
-            task->path = st->pwd;
-            task->infos = &st->panel_file->file_infos;
-            pw_queue(&st->gaki->pw_task, task_panel_gaki_read_dir, task);
+            task->gaki = gaki;
+            task->path = panel->path;
+            pw_queue(&gaki->pw_task, task_panel_gaki_read_dir, task);
         }
+#endif
     }
 
     if(ac->select_up) {
-        panel_gaki_select_up(st, ac->select_up);
+        panel_gaki_select_up(panel, ac->select_up);
     }
 
     if(ac->select_down) {
-        panel_gaki_select_down(st, ac->select_down);
+        panel_gaki_select_down(panel, ac->select_down);
     }
 
-    if(st->panel_file && st->panel_file->select < file_infos_length(st->panel_file->file_infos)) {
-        File_Info *current = file_infos_get_at(&st->panel_file->file_infos, st->panel_file->select);
+    if(panel->panel_file && panel->panel_file->select < file_infos_length(panel->panel_file->file_infos)) {
+        File_Info *current = file_infos_get_at(&panel->panel_file->file_infos, panel->panel_file->select);
+#if 0
         if(!current->have_read) {
             current->have_read = true;
             if(S_ISREG(current->stats.st_mode)) {
                 Task_File_Info_Load_File *task;
                 NEW(Task_File_Info_Load_File, task);
                 task->current = current;
-                task->gaki = st->gaki;
-                pw_queue(&st->gaki->pw_task, task_file_info_load_file, task);
+                task->gaki = gaki;
+                pw_queue(&gaki->pw_task, task_file_info_load_file, task);
             }
             if(S_ISDIR(current->stats.st_mode)) {
-                 t_panel_file_ensure_exist(&st->t_file_infos, &current->panel_file, current->path);
-#if 1
+                 t_panel_file_ensure_exist(&gaki->t_panels, &current->panel_file, current->path);
 
-                 if(!current->panel_file->read) {
-                     current->panel_file->read = true;
+                 if(!current->panel_file->have_read) {
+                     current->panel_file->have_read = true;
 
                      Task_Panel_Gaki_Read_Dir *task;
                      NEW(Task_Panel_Gaki_Read_Dir, task);
-                     task->gaki = st->gaki;
+                     task->gaki = gaki;
                      task->path = current->path;
-                     task->infos = &current->panel_file->file_infos;
-                     task->printable = &current->printable;
-                     pw_queue(&st->gaki->pw_task, task_panel_gaki_read_dir, task);
+                     //task->infos = &current->panel_file->file_infos;
+                     //task->printable = &current->printable;
+                     pw_queue(&gaki->pw_task, task_panel_gaki_read_dir, task);
                  }
-
-#else
-
-            //     Task_File_Info_Read_Dir *task;
-            //     NEW(Task_File_Info_Read_Dir, task);
-            //     task->current = current;
-            //     task->gaki = st->gaki;
-            //     pw_queue(&st->gaki->pw_task, task_panel_file_read_dir, task);
-
-#endif
             }
         }
+#endif
     }
 
-    pthread_mutex_unlock(&st->rwlock);
+    pthread_mutex_unlock(&panel->rwlock);
 }
 
 
-void panel_gaki_render(Tui_Buffer *buffer, Panel_Gaki *st) {
+void panel_gaki_render(Gaki *gaki, Tui_Buffer *buffer, Panel_Gaki *panel) {
     
-    So *tmp = &st->tmp;
+    So tmp = SO;
     
     /* draw file preview */
-    so_clear(tmp);
+    so_clear(&tmp);
     File_Info *current = 0;
 #if 1
-    for(size_t i = 0; st->panel_file && i < file_infos_length(st->panel_file->file_infos); ++i) {
-        File_Info *unsel = file_infos_get_at(&st->panel_file->file_infos, i);
+    Panel_Directory *dir = &panel->directory;
+
+    size_t len = array_len(dir->sub);
+
+    for(size_t i = 0; i < len; ++i) {
+        Panel_File_Info *unsel = array_at(dir->sub, i);
         unsel->selected = false;
     }
 
-    if(st->panel_file && st->panel_file->select < file_infos_length(st->panel_file->file_infos)) {
+    if(dir->index < len) {
 
-        if(!pthread_mutex_lock(&st->rwlock)) {
+        if(!pthread_mutex_lock(&gaki->sync_panel.mtx)) {
 
-            current = file_infos_get_at(&st->panel_file->file_infos, st->panel_file->select);
+            current = file_infos_get_at(&panel->->file_infos, panel->panel_file->select);
             current->selected = true;
             if(current->printable) {
 
                 if(S_ISREG(current->stats.st_mode)) {
-
-                    tui_buffer_draw(buffer, st->layout.rc_preview, 0, 0, 0, current->content);
+                    tui_buffer_draw(buffer, panel->layout.rc_preview, 0, 0, 0, current->content);
                 }
 
                 if(S_ISDIR(current->stats.st_mode)) {
-                    panel_file_render(buffer, st->layout.rc_preview, current->panel_file);
+                    panel_directory_render(buffer, panel->layout.rc_preview, current->);
                 }
             }
 
-            pthread_mutex_unlock(&st->rwlock);
+            pthread_mutex_unlock(&panel->rwlock);
         }
     }
 
@@ -388,14 +397,14 @@ void panel_gaki_render(Tui_Buffer *buffer, Panel_Gaki *st) {
 
 #if 1
     /* draw vertical bar */
-    so_clear(tmp);
-    for(size_t i = 0; i < st->layout.rc_split.dim.y; ++i) {
-        so_extend(tmp, so("│\n"));
+    so_clear(&tmp);
+    for(size_t i = 0; i < panel->layout.rc_split.dim.y; ++i) {
+        so_extend(&tmp, so("│\n"));
     }
-    tui_buffer_draw(buffer, st->layout.rc_split, 0, 0, 0, *tmp);
+    tui_buffer_draw(buffer, panel->layout.rc_split, 0, 0, 0, tmp);
 
     /* draw file infos */
-    panel_file_render(buffer, st->layout.rc_files, st->panel_file);
+    //panel_directory_render(buffer, panel->layout.rc_files, panel->directory);
 #endif
 
 #if 1
@@ -406,29 +415,31 @@ void panel_gaki_render(Tui_Buffer *buffer, Panel_Gaki *st) {
     if(current) {
 
         // so_clear(tmp);
-        // so_fmt(tmp, "%.*s (frame %zu)", SO_F(current->path), st->gaki->frames);
-        // tui_buffer_draw(buffer, st->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, *tmp);
+        // so_fmt(tmp, "%.*s (frame %zu)", SO_F(current->path), panel->gaki->frames);
+        // tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, *tmp);
 
-        so_clear(tmp);
-        Tui_Rect rc_mode = st->layout.rc_pwd;
+        so_clear(&tmp);
+        Tui_Rect rc_mode = panel->layout.rc_pwd;
         if(S_ISDIR(current->stats.st_mode)) {
-            so_fmt(tmp, "[DIR]");
+            so_fmt(&tmp, "[DIR]");
             bar_bg.col8 = 4;
         } else if(S_ISREG(current->stats.st_mode)) {
-            so_fmt(tmp, "[FILE]");
+            so_fmt(&tmp, "[FILE]");
             bar_bg.col8 = 5;
         } else {
-            so_fmt(tmp, "[?]");
+            so_fmt(&tmp, "[?]");
         }
-        rc_mode.dim.x = tmp->len;
+        rc_mode.dim.x = tmp.len;
         rc_mode.anc.x = buffer->dimension.x - rc_mode.dim.x;
-        tui_buffer_draw(buffer, st->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, current->path);
-        tui_buffer_draw(buffer, rc_mode, &bar_fg, &bar_bg, &bar_fx, *tmp);
+        tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, current->path);
+        tui_buffer_draw(buffer, rc_mode, &bar_fg, &bar_bg, &bar_fx, tmp);
 
     } else {
-        tui_buffer_draw(buffer, st->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, st->pwd);
+        tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, panel->path);
     }
 #endif
+
+    so_free(&tmp);
 
 }
 
