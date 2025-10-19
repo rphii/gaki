@@ -1,6 +1,7 @@
 #ifndef GAKI_SYNC_H
 
 #include <pthread.h>
+#include "panel-gaki.h"
 
 typedef struct Gaki_Sync_Main {
     pthread_cond_t cond;
@@ -25,6 +26,11 @@ typedef struct Gaki_Sync_Input {
     pthread_mutex_t mtx;
     unsigned int idle;
 } Gaki_Sync_Input;
+
+typedef struct Gaki_Sync_Panel {
+    pthread_mutex_t mtx;
+    Panel_Gaki panel_gaki;
+} Gaki_Sync_Panel;
 
 #define GAKI_SYNC_H
 #endif

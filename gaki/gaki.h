@@ -29,12 +29,14 @@ typedef struct Gaki {
     Gaki_Sync_Main sync_main;
     Gaki_Sync_Draw sync_draw;
     Gaki_Sync_Input sync_input;
+    Gaki_Sync_Panel sync_panel;
+
+    T_File_Info t_file_info;
 
     Pw pw_main;
     Pw pw_draw;
     Pw pw_task;
 
-    Panel_Gaki panel_gaki;
     Action ac;
 
     bool quit;

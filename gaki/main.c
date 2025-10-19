@@ -251,7 +251,7 @@ int main(int argc, char **argv) {
     Gaki gaki = { .resized = true, .sync_main.update_do = true };
 
     if(argc >= 2) {
-        gaki.panel_gaki.pwd = so_ensure_dir(so_clone(so_l(argv[1])));
+        gaki.panel_gaki.path = so_ensure_dir(so_clone(so_l(argv[1])));
     }
 
     gaki_global_set(&gaki);
@@ -269,8 +269,6 @@ int main(int argc, char **argv) {
     pw_init(&gaki.pw_task, 4);
     pw_dispatch(&gaki.pw_task);
 
-    gaki.panel_gaki.gaki = &gaki;
-
     fast_srand(time(0));
 
     //for(size_t i = 0; i < 1000; ++i) {
@@ -284,7 +282,7 @@ int main(int argc, char **argv) {
 
         if(update_do) {
             handle_resize(&gaki);
-            panel_gaki_update(&gaki.panel_gaki, &gaki.ac);
+            panel_gaki_update(&gaki, &gaki.panel_gaki, &gaki.ac);
             memset(&gaki.ac, 0, sizeof(gaki.ac));
 
             pthread_mutex_lock(&gaki.sync_main.mtx);
