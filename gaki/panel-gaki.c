@@ -384,7 +384,7 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
         Nav_Directory *nav_sub = array_at(nav->list, i);
         ++dim.anc.y;
         so_clear(&tmp);
-        so_fmt(&tmp, "%.*s", SO_F(so_get_basename(nav_sub->pwd.ref->path)));
+        so_fmt(&tmp, "%.*s", SO_F(so_get_nodir(nav_sub->pwd.ref->path)));
         tui_buffer_draw(buffer, dim, 0, 0, 0, tmp);
     }
 
