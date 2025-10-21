@@ -59,13 +59,15 @@ void handle_resize(Gaki *gaki) {
         .y = w.ws_row,
     };
 
-    Tui_Point dimension_prev = gaki->panel_gaki.config.rc.dim;
+#if 0
+    Tui_Point dimension_prev = gaki->sync_panel.panel_gaki.config.rc.dim;
 
     if(!tui_point_cmp(dimension_prev, dimension)) {
         return;
     }
 
-    gaki->panel_gaki.config.rc = (Tui_Rect){ .dim = dimension };
+    gaki->sync_panel.panel_gaki.config.rc = (Tui_Rect){ .dim = dimension };
+#endif
     tui_buffer_resize(&gaki->buffer, dimension);
 }
 
@@ -117,7 +119,8 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
             }
 
             if(gaki->input_curr.id == INPUT_MOUSE) {
-                if(tui_rect_encloses_point(gaki->panel_gaki.layout.rc_files, gaki->input_curr.mouse.pos)) {
+#if 0
+                if(tui_rect_encloses_point(gaki->sync_panel.panel_gaki.layout.rc_files, gaki->input_curr.mouse.pos)) {
                     if(gaki->input_curr.mouse.scroll > 0) {
                         gaki->ac.select_down = 1;
                     } else if(gaki->input_curr.mouse.scroll < 0) {
@@ -125,13 +128,14 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
                     }
                 }
                 if(gaki->input_curr.mouse.l) {
-                    if(tui_rect_encloses_point(gaki->panel_gaki.layout.rc_files, gaki->input_curr.mouse.pos)) {
-                        Tui_Point pt = tui_rect_project_point(gaki->panel_gaki.layout.rc_files, gaki->input_curr.mouse.pos);
-                        if(gaki->panel_gaki.panel_file) {
-                            gaki->panel_gaki.panel_file->select = pt.y + gaki->panel_gaki.panel_file->offset;
+                    if(tui_rect_encloses_point(gaki->sync_panel.panel_gaki.layout.rc_files, gaki->input_curr.mouse.pos)) {
+                        Tui_Point pt = tui_rect_project_point(gaki->sync_panel.panel_gaki.layout.rc_files, gaki->input_curr.mouse.pos);
+                        if(gaki->sync_panel.panel_gaki.nav_directory) {
+                            gaki->sync_panel.panel_gaki.nav_directory->index = pt.y + gaki->sync_panel.panel_gaki.nav_directory->offset;
                         }
                     }
                 }
+#endif
                 if(gaki->input_curr.mouse.m) {
                 }
                 if(gaki->input_curr.mouse.r) {
@@ -250,10 +254,6 @@ int main(int argc, char **argv) {
     So out = SO;
     Gaki gaki = { .resized = true, .sync_main.update_do = true };
 
-    if(argc >= 2) {
-        gaki.panel_gaki.path = so_ensure_dir(so_clone(so_l(argv[1])));
-    }
-
     gaki_global_set(&gaki);
 
     signal(SIGWINCH, signal_winch);
@@ -269,6 +269,15 @@ int main(int argc, char **argv) {
     pw_init(&gaki.pw_task, 4);
     pw_dispatch(&gaki.pw_task);
 
+    if(argc >= 2) {
+        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, so_l(argv[1]));
+    } else {
+        So pwd = SO;
+        so_env_get(&pwd, so("PWD"));
+        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, pwd);
+        so_free(&pwd);
+    }
+
     fast_srand(time(0));
 
     //for(size_t i = 0; i < 1000; ++i) {
@@ -282,7 +291,7 @@ int main(int argc, char **argv) {
 
         if(update_do) {
             handle_resize(&gaki);
-            panel_gaki_update(&gaki, &gaki.panel_gaki, &gaki.ac);
+            //panel_gaki_update(&gaki, &gaki.sync_panel.panel_gaki, &gaki.ac);
             memset(&gaki.ac, 0, sizeof(gaki.ac));
 
             pthread_mutex_lock(&gaki.sync_main.mtx);
@@ -309,7 +318,7 @@ int main(int argc, char **argv) {
 
         if(render_do && !draw_busy) {
             tui_buffer_clear(&gaki.buffer);
-            panel_gaki_render(&gaki.buffer, &gaki.panel_gaki);
+            panel_gaki_render(&gaki.buffer, &gaki.sync_panel);
 
             pthread_mutex_lock(&gaki.sync_main.mtx);
             ++gaki.sync_main.render_done;
