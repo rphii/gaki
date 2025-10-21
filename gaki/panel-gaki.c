@@ -3,7 +3,6 @@
 #include <sys/wait.h>
 
 #include "panel-gaki.h"
-#include "panel-file.h"
 #include "gaki.h"
 
 #if 0
@@ -118,10 +117,10 @@ void *task_file_info_load_file(Pw *pw, bool *quit, void *void_task) {
         so_free(&content);
     }
 
-    pthread_mutex_lock(&task->gaki->sync_panel.mtx);
+    //pthread_mutex_lock(&task->gaki->sync_panel.mtx);
     //task->current->content = content;
     //task->current->printable = printable;
-    pthread_mutex_unlock(&task->gaki->sync_panel.mtx);
+    //pthread_mutex_unlock(&task->gaki->sync_panel.mtx);
 
     if(printable) {
         pthread_mutex_lock(&task->gaki->sync_main.mtx);
@@ -201,7 +200,8 @@ void *task_panel_file_read_dir(Pw *pw, bool *quit, void *void_task) {
 
 void panel_gaki_update(Gaki *gaki, Panel_Gaki *panel, Action *ac) {
 
-    pthread_mutex_lock(&panel->rwlock);
+#if 0
+    pthread_mutex_lock(&gaki->sync_panel.mtx);
 
     panel_gaki_layout_from_rules(&panel->layout, &panel->config);
 
@@ -351,24 +351,54 @@ void panel_gaki_update(Gaki *gaki, Panel_Gaki *panel, Action *ac) {
 #endif
     }
 
-    pthread_mutex_unlock(&panel->rwlock);
+    pthread_mutex_unlock(&gaki->sync_panel.mtx);
+#endif
 }
 
 
-void panel_gaki_render(Gaki *gaki, Tui_Buffer *buffer, Panel_Gaki *panel) {
+void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     
     So tmp = SO;
     
     /* draw file preview */
     so_clear(&tmp);
-    File_Info *current = 0;
-#if 1
-    Panel_Directory *dir = &panel->directory;
 
-    size_t len = array_len(dir->sub);
+#if 1
+
+    Panel_Gaki *panel = &sync->panel_gaki;
+    Tui_Rect dim = { .dim = buffer->dimension };
+    dim.dim.y = 1;
+
+    pthread_mutex_lock(&sync->mtx);
+    if(!panel->nav_directory) goto exit;
+
+    Nav_Directory *nav = sync->panel_gaki.nav_directory;
+    if(!nav) goto exit;
+
+    Nav_File_Info *pwd = &nav->pwd;
+    if(!pwd->ref) goto exit;
+
+    tui_buffer_draw(buffer, dim, 0, 0, 0, pwd->ref->path);
+
+    for(size_t i = 0; i < array_len(nav->list); ++i) {
+        Nav_Directory *nav_sub = array_at(nav->list, i);
+        ++dim.anc.y;
+        so_clear(&tmp);
+        so_fmt(&tmp, "%.*s", SO_F(so_get_basename(nav_sub->pwd.ref->path)));
+        tui_buffer_draw(buffer, dim, 0, 0, 0, tmp);
+    }
+
+exit:
+    pthread_mutex_unlock(&sync->mtx);
+
+#else
+#if 0
+    Nav_Directory *dir = panel->nav_directory;
+
+    size_t len = array_len(dir->list);
 
     for(size_t i = 0; i < len; ++i) {
-        Panel_File_Info *unsel = array_at(dir->sub, i);
+        Nav_File_Info *unsel = array_at(dir->list, i);
         unsel->selected = false;
     }
 
@@ -376,20 +406,20 @@ void panel_gaki_render(Gaki *gaki, Tui_Buffer *buffer, Panel_Gaki *panel) {
 
         if(!pthread_mutex_lock(&gaki->sync_panel.mtx)) {
 
-            current = file_infos_get_at(&panel->->file_infos, panel->panel_file->select);
-            current->selected = true;
-            if(current->printable) {
+            current = array_at(panel->nav_directory->list, panel->nav_directory->index);
+            current->pwd.selected = true;
+            if(current->pwd.printable) {
 
-                if(S_ISREG(current->stats.st_mode)) {
-                    tui_buffer_draw(buffer, panel->layout.rc_preview, 0, 0, 0, current->content);
+                if(S_ISREG(current->pwd.ref->stats.st_mode)) {
+                    tui_buffer_draw(buffer, panel->layout.rc_preview, 0, 0, 0, current->pwd.ref->content.text);
                 }
 
-                if(S_ISDIR(current->stats.st_mode)) {
-                    panel_directory_render(buffer, panel->layout.rc_preview, current->);
+                if(S_ISDIR(current->pwd.ref->stats.st_mode)) {
+                    //panel_directory_render(buffer, panel->layout.rc_preview, current->ref->content.files);
                 }
             }
 
-            pthread_mutex_unlock(&panel->rwlock);
+            pthread_mutex_unlock(&gaki->sync_panel.mtx);
         }
     }
 
@@ -418,12 +448,13 @@ void panel_gaki_render(Gaki *gaki, Tui_Buffer *buffer, Panel_Gaki *panel) {
         // so_fmt(tmp, "%.*s (frame %zu)", SO_F(current->path), panel->gaki->frames);
         // tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, *tmp);
 
+#if 0
         so_clear(&tmp);
         Tui_Rect rc_mode = panel->layout.rc_pwd;
-        if(S_ISDIR(current->stats.st_mode)) {
+        if(S_ISDIR(current->ref->stats.st_mode)) {
             so_fmt(&tmp, "[DIR]");
             bar_bg.col8 = 4;
-        } else if(S_ISREG(current->stats.st_mode)) {
+        } else if(S_ISREG(current->ref->stats.st_mode)) {
             so_fmt(&tmp, "[FILE]");
             bar_bg.col8 = 5;
         } else {
@@ -431,12 +462,14 @@ void panel_gaki_render(Gaki *gaki, Tui_Buffer *buffer, Panel_Gaki *panel) {
         }
         rc_mode.dim.x = tmp.len;
         rc_mode.anc.x = buffer->dimension.x - rc_mode.dim.x;
-        tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, current->path);
+        tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, current->ref->path);
         tui_buffer_draw(buffer, rc_mode, &bar_fg, &bar_bg, &bar_fx, tmp);
+#endif
 
     } else {
-        tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, panel->path);
+        //tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, panel->path);
     }
+#endif
 #endif
 
     so_free(&tmp);
