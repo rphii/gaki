@@ -59,15 +59,12 @@ void handle_resize(Gaki *gaki) {
         .y = w.ws_row,
     };
 
-#if 0
-    Tui_Point dimension_prev = gaki->sync_panel.panel_gaki.config.rc.dim;
-
+    Tui_Point dimension_prev = gaki->buffer.dimension;
     if(!tui_point_cmp(dimension_prev, dimension)) {
         return;
     }
 
     gaki->sync_panel.panel_gaki.config.rc = (Tui_Rect){ .dim = dimension };
-#endif
     tui_buffer_resize(&gaki->buffer, dimension);
 }
 
@@ -291,7 +288,7 @@ int main(int argc, char **argv) {
 
         if(update_do) {
             handle_resize(&gaki);
-            //panel_gaki_update(&gaki, &gaki.sync_panel.panel_gaki, &gaki.ac);
+            panel_gaki_update(&gaki.sync_panel, &gaki.ac);
             memset(&gaki.ac, 0, sizeof(gaki.ac));
 
             pthread_mutex_lock(&gaki.sync_main.mtx);
@@ -346,10 +343,10 @@ int main(int argc, char **argv) {
         }
         while(!gaki.sync_main.update_do && !gaki.sync_main.render_do) {
 #if 0
-            ++gaki.sync_main.update_do;
-            gaki.ac.select_down = 1;
-            gaki.ac.select_right = fast_rand() % 3;
-            gaki.ac.select_left = fast_rand() % 2;
+            ++gaki.sync_main.render_do;
+            //gaki.ac.select_down = 1;
+            //gaki.ac.select_right = fast_rand() % 3;
+            //gaki.ac.select_left = fast_rand() % 2;
 #endif
             if(gaki.resized) {
                 gaki.sync_main.update_do = true;

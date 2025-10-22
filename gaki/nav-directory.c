@@ -68,6 +68,32 @@ void x() {
 
 #include <dirent.h>
 
+
+void nav_directories_sort(Nav_Directories *vec) {
+    /* shell sort, https://rosettacode.org/wiki/Sorting_algorithms/Shell_sort */
+    size_t h, i, j, n = array_len(vec);
+    Nav_Directory *temp;
+    for (h = n; h /= 2;) {
+        for (i = h; i < n; i++) {
+            /*t = a[i]; */
+            temp = array_at(vec, i);
+            //printff("\rtemp = [%zu]",i);
+            /*for (j = i; j >= h && t < a[j - h]; j -= h) { */
+            So so_a = temp->pwd.ref->path;
+            for (j = i; j >= h && so_cmp_s(so_a, (array_at(vec, j-h))->pwd.ref->path) < 0; j -= h) {
+                //printff("\r '%.*s'%.*s'", SO_F(so_a), SO_F((array_at(vec, j-h))->pwd.ref->path));
+                *array_it(vec, j) = array_at(vec, j-h);
+                //printff("\r[%zu] = [%zu]",j,j-h);
+                /*a[j] = a[j - h]; */
+            }
+            /*a[j] = t; */
+            *array_it(vec, j) = temp;
+            //printff("\r[%zu] = temp",j);
+            //sleep(1);
+        }
+    }
+}
+
 void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
     ASSERT_ARG(pw);
     ASSERT_ARG(cancel);
@@ -97,7 +123,7 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
         closedir(d);
     }
 
-    //tmp.
+    nav_directories_sort(tmp.list);
 
     Nav_Directory *nav = task->sync->panel_gaki.nav_directory;
     pthread_mutex_lock(&task->sync->mtx);

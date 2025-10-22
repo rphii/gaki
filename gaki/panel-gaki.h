@@ -30,7 +30,7 @@ typedef struct Panel_Gaki {
 void panel_gaki_select_up(Panel_Gaki *st, size_t n);
 void panel_gaki_select_down(Panel_Gaki *st, size_t n);
 void panel_gaki_select_at(Panel_Gaki *st, size_t n);
-void panel_gaki_update(Gaki *gaki, Panel_Gaki *st, Action *ac);
+void panel_gaki_update(Gaki_Sync_Panel *sync, Action *ac);
 
 void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *gaki);
 
