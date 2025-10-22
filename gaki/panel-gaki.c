@@ -215,7 +215,73 @@ void panel_gaki_update(Pw *pw, Gaki_Sync_Panel *sync, Gaki_Sync_Main *sync_m, Ga
     if(ac->select_right) {
         Nav_Directory *nav = sync->panel_gaki.nav_directory;
         if(nav && nav->index < array_len(nav->list)) {
-            sync->panel_gaki.nav_directory = array_at(nav->list, nav->index);
+            nav = array_at(nav->list, nav->index);
+        }
+        switch(nav->pwd.ref->stats.st_mode & S_IFMT) {
+            case S_IFDIR: {
+                sync->panel_gaki.nav_directory = nav;
+            } break;
+            case S_IFREG: {
+
+#if 0
+                So ed = SO;
+                so_env_get(&ed, so("EDITOR"));
+                if(!so_len(ed)) {
+                    // TODO make some kind of notice
+                    printff("\rNO EDITOR FOUND");
+                    exit(1);
+                }
+
+                /* pause input */
+                pthread_mutex_lock(&gaki->sync_input.mtx);
+                gaki->sync_input.idle = true;
+                pthread_mutex_unlock(&gaki->sync_input.mtx);
+
+                pid_t pid = fork();
+                if(pid < 0) {
+                    // TODO make some kind of notice
+                    printff("\rFORK FAILED");
+                    exit(1);
+                } else if(!pid) {
+                    char *ced = so_dup(ed);
+                    char *cpath = so_dup(sel->path);
+                    char *cargs[] = { ced, cpath, 0 };
+                    system("tput rmcup");
+                    execvp(ced, cargs);
+                    _exit(EXIT_FAILURE);
+                }
+
+                int status;
+                waitpid(pid, &status, 0);
+
+                if(status) {
+                    // TODO make some kind of notice
+                    printff("\rCHILD FAILED");
+                    exit(1);
+                }
+
+                system("tput smcup");
+
+                /* resume input */
+                pthread_mutex_lock(&gaki->sync_input.mtx);
+                gaki->sync_input.idle = false;
+                pthread_cond_signal(&gaki->sync_input.cond);
+                pthread_mutex_unlock(&gaki->sync_input.mtx);
+
+                /* issue a redraw */
+                pthread_mutex_lock(&gaki->sync_draw.mtx);
+                ++gaki->sync_draw.draw_redraw;
+                pthread_mutex_unlock(&gaki->sync_draw.mtx);
+
+                /* force update */
+                pthread_mutex_lock(&gaki->sync_main.mtx);
+                ++gaki->sync_main.update_do;
+                pthread_cond_signal(&gaki->sync_main.cond);
+                pthread_mutex_unlock(&gaki->sync_main.mtx);
+#endif
+
+            } break;
+            default: break;
         }
     }
 
