@@ -122,7 +122,7 @@ void *task_file_info_load_file(Pw *pw, bool *quit, void *void_task) {
 
     if(printable) {
         pthread_mutex_lock(&task->gaki->sync_main.mtx);
-        ++task->gaki->sync_main.render_do;
+        ++task->gaki->sync_main.update_do;
         pthread_cond_signal(&task->gaki->sync_main.cond);
         pthread_mutex_unlock(&task->gaki->sync_main.mtx);
     }
@@ -212,6 +212,19 @@ void panel_gaki_update(Pw *pw, Gaki_Sync_Panel *sync, Gaki_Sync_Main *sync_m, Ga
         panel_gaki_select_down(&sync->panel_gaki, ac->select_down);
     }
 
+    if(ac->select_right) {
+        Nav_Directory *nav = sync->panel_gaki.nav_directory;
+        if(nav && nav->index < array_len(nav->list)) {
+            sync->panel_gaki.nav_directory = array_at(nav->list, nav->index);
+        }
+    }
+
+    if(ac->select_left) {
+        Nav_Directory *nav = sync->panel_gaki.nav_directory;
+        if(nav && nav->parent) {
+            sync->panel_gaki.nav_directory = nav->parent;
+        }
+    }
 
     Nav_Directory *nav = sync->panel_gaki.nav_directory;
     if(nav && nav->index < array_len(nav->list)) {
@@ -394,8 +407,6 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     /* draw file preview */
     so_clear(&tmp);
 
-#if 1
-
     Panel_Gaki *panel = &sync->panel_gaki;
     Tui_Rect rc;
 
@@ -421,7 +432,6 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
         // so_fmt(tmp, "%.*s (frame %zu)", SO_F(current->path), panel->gaki->frames);
         // tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, *tmp);
 
-#if 1
         so_clear(&tmp);
         Tui_Rect rc_mode = panel->layout.rc_pwd;
         if(S_ISDIR(current->pwd.ref->stats.st_mode)) {
@@ -437,7 +447,6 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
         rc_mode.anc.x = buffer->dimension.x - rc_mode.dim.x;
         tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, current->pwd.ref->path);
         tui_buffer_draw(buffer, rc_mode, &bar_fg, &bar_bg, &bar_fx, tmp);
-#endif
 
     } else {
         tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, nav->pwd.ref->path);
@@ -457,56 +466,15 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
         }
     }
 
-exit:
-    pthread_mutex_unlock(&sync->mtx);
-
-#else
-#if 0
-    Nav_Directory *dir = panel->nav_directory;
-
-    size_t len = array_len(dir->list);
-
-    for(size_t i = 0; i < len; ++i) {
-        Nav_File_Info *unsel = array_at(dir->list, i);
-        unsel->selected = false;
-    }
-
-    if(dir->index < len) {
-
-        if(!pthread_mutex_lock(&gaki->sync_panel.mtx)) {
-
-            current = array_at(panel->nav_directory->list, panel->nav_directory->index);
-            current->pwd.selected = true;
-            if(current->pwd.printable) {
-
-                if(S_ISREG(current->pwd.ref->stats.st_mode)) {
-                    tui_buffer_draw(buffer, panel->layout.rc_preview, 0, 0, 0, current->pwd.ref->content.text);
-                }
-
-                if(S_ISDIR(current->pwd.ref->stats.st_mode)) {
-                    //panel_directory_render(buffer, panel->layout.rc_preview, current->ref->content.files);
-                }
-            }
-
-            pthread_mutex_unlock(&gaki->sync_panel.mtx);
-        }
-    }
-
-#endif
-
-#if 1
-    /* draw vertical bar */
+    /* draw vertical split */
     so_clear(&tmp);
     for(size_t i = 0; i < panel->layout.rc_split.dim.y; ++i) {
         so_extend(&tmp, so("│\n"));
     }
     tui_buffer_draw(buffer, panel->layout.rc_split, 0, 0, 0, tmp);
 
-    /* draw file infos */
-    //panel_directory_render(buffer, panel->layout.rc_files, panel->directory);
-#endif
-
-#endif
+exit:
+    pthread_mutex_unlock(&sync->mtx);
 
     so_free(&tmp);
 
