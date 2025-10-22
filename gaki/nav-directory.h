@@ -18,6 +18,7 @@ typedef struct Nav_Directory {
 } Nav_Directory, *Nav_Directories;
 
 void nav_directory_dispatch_register(Pw *pw, Gaki_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, So path);
+void nav_directory_dispatch_readany(Pw *pw, Gaki_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, Nav_Directory *dir);
 
 #define NAV_DIRECTORY
 #endif
