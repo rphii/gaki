@@ -222,6 +222,7 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
         ssize_t written = 0;
         char *begin = so_it0(draw);
         while(written < len) {
+            //break;
             errno = 0;
             ssize_t written_chunk = write(STDOUT_FILENO, begin, len - written);
             if(written_chunk > 0) {
@@ -288,7 +289,7 @@ int main(int argc, char **argv) {
 
         if(update_do) {
             handle_resize(&gaki);
-            panel_gaki_update(&gaki.sync_panel, &gaki.ac);
+            panel_gaki_update(&gaki.pw_task, &gaki.sync_panel, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.ac);
             memset(&gaki.ac, 0, sizeof(gaki.ac));
 
             pthread_mutex_lock(&gaki.sync_main.mtx);
@@ -343,8 +344,8 @@ int main(int argc, char **argv) {
         }
         while(!gaki.sync_main.update_do && !gaki.sync_main.render_do) {
 #if 0
-            ++gaki.sync_main.render_do;
-            //gaki.ac.select_down = 1;
+            ++gaki.sync_main.update_do;
+            gaki.ac.select_down = 1;
             //gaki.ac.select_right = fast_rand() % 3;
             //gaki.ac.select_left = fast_rand() % 2;
 #endif

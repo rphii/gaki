@@ -196,11 +196,13 @@ void *task_panel_file_read_dir(Pw *pw, bool *quit, void *void_task) {
 }
 
 
-void panel_gaki_update(Gaki_Sync_Panel *sync, Action *ac) {
+void panel_gaki_update(Pw *pw, Gaki_Sync_Panel *sync, Gaki_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Action *ac) {
 
     pthread_mutex_lock(&sync->mtx);
 
     panel_gaki_layout_from_rules(&sync->panel_gaki.layout, &sync->panel_gaki.config);
+
+    //void nav_directory_dispatch_readany(Pw *pw, Gaki_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, Nav_Directory *dir);
 
     if(ac->select_up) {
         panel_gaki_select_up(&sync->panel_gaki, ac->select_up);
@@ -210,6 +212,16 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Action *ac) {
         panel_gaki_select_down(&sync->panel_gaki, ac->select_down);
     }
 
+
+    Nav_Directory *nav = sync->panel_gaki.nav_directory;
+    if(nav && nav->index < array_len(nav->list)) {
+        Nav_Directory *nav_sub = array_at(nav->list, nav->index);
+        if(nav_sub && nav_sub->pwd.ref) {
+            //printff("NOT READ: %.*s",SO_F(nav_sub->pwd.ref->path));
+            nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav_sub);
+            //exit(1);
+        }
+    }
 
 #if 0
     if(ac->select_left) {
@@ -355,6 +367,26 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Action *ac) {
 }
 
 
+void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, Panel_Gaki *panel, Tui_Rect rc) {
+
+    /* print file list */
+    Tui_Color dir_fg = { .type = TUI_COLOR_8, .col8 = 0 };
+    Tui_Color dir_bg = { .type = TUI_COLOR_8, .col8 = 7 };
+    rc.dim.y = 1;
+    size_t list_len = array_len(nav->list);
+    //printff("RENDER: [%.*s] LEN %zu", SO_F(nav->pwd.ref->path), list_len);
+    for(size_t i = nav->offset; i < list_len; ++i) {
+        if(rc.anc.y >= buffer->dimension.y) break;
+        Nav_Directory *nav_sub = array_at(nav->list, i);
+        Tui_Color *fg = (nav->index == i) ? &dir_fg : 0;
+        Tui_Color *bg = (nav->index == i) ? &dir_bg : 0;
+        so_clear(tmp);
+        so_fmt(tmp, "%.*s", SO_F(so_get_nodir(nav_sub->pwd.ref->path)));
+        tui_buffer_draw(buffer, rc, fg, bg, 0, *tmp);
+        ++rc.anc.y;
+    }
+}
+
 void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     
     So tmp = SO;
@@ -376,28 +408,13 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     Nav_File_Info *pwd = &nav->pwd;
     if(!pwd->ref) goto exit;
 
-    /* print file list */
-    Tui_Color dir_fg = { .type = TUI_COLOR_8, .col8 = 0 };
-    Tui_Color dir_bg = { .type = TUI_COLOR_8, .col8 = 7 };
-    rc = panel->layout.rc_files;
-    rc.dim.y = 1;
-    size_t list_len = array_len(nav->list);
-    for(size_t i = nav->offset; i < list_len; ++i) {
-        if(rc.anc.y >= buffer->dimension.y) break;
-        Nav_Directory *nav_sub = array_at(nav->list, i);
-        Tui_Color *fg = (nav->index == i) ? &dir_fg : 0;
-        Tui_Color *bg = (nav->index == i) ? &dir_bg : 0;
-        so_clear(&tmp);
-        so_fmt(&tmp, "%.*s", SO_F(so_get_nodir(nav_sub->pwd.ref->path)));
-        tui_buffer_draw(buffer, rc, fg, bg, 0, tmp);
-        ++rc.anc.y;
-    }
+    panel_gaki_render_nav_dir(buffer, &tmp, nav, panel, panel->layout.rc_files);
 
     /* draw current dir/file/type */
     Tui_Color bar_bg = { .type = TUI_COLOR_8, .col8 = 1 };
     Tui_Color bar_fg = { .type = TUI_COLOR_8, .col8 = 7 };
     Tui_Fx bar_fx = { .bold = true };
-    Nav_Directory *current = nav->index < list_len ? array_at(nav->list, nav->index) : 0;
+    Nav_Directory *current = nav->index < array_len(nav->list) ? array_at(nav->list, nav->index) : 0;
     if(current && nav->pwd.ref) {
 
         // so_clear(tmp);
@@ -424,6 +441,20 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
 
     } else {
         tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, nav->pwd.ref->path);
+    }
+
+    /* draw content */
+    if(current && current->pwd.ref->loaded) {
+        //tui_buffer_draw(buffer, panel->layout.rc_preview, &bar_fg, &bar_bg, &bar_fx, so("HAVE READ"));
+        switch(current->pwd.ref->stats.st_mode & S_IFMT) {
+            case S_IFREG: {
+                //printff("\r[%.*s]",SO_F(current->pwd.ref->content.text));
+                tui_buffer_draw(buffer, panel->layout.rc_preview, 0, 0, 0, current->pwd.ref->content.text);
+            } break;
+            case S_IFDIR: {
+                panel_gaki_render_nav_dir(buffer, &tmp, current, panel, panel->layout.rc_preview);
+            } break;
+        }
     }
 
 exit:

@@ -16,6 +16,7 @@ typedef struct File_Info {
         So text;
         File_Infos *files;
     } content;
+    bool loaded;
 } File_Info;
 
 int file_info_cmp(File_Info *a, File_Info *b);

@@ -94,6 +94,35 @@ void nav_directories_sort(Nav_Directories *vec) {
     }
 }
 
+void *nav_directory_async_readreg(Pw *pw, bool *cancel, void *void_task) {
+    ASSERT_ARG(pw);
+    ASSERT_ARG(cancel);
+    ASSERT_ARG(void_task);
+    Task_Nav_Directory_Readreg *task = void_task;
+    Nav_Directory *nav = task->nav;
+    So content = SO;
+    so_file_read(nav->pwd.ref->path, &content);
+    //printff(TUI_ESC_CODE_CLEAR);
+    //printff("\r[%.*s] << READ, LEN: %zu",SO_F(nav->pwd.ref->path), content.len);sleep(1);
+    //printff("\r[%.*s]",SO_F(content));sleep(1);
+
+
+    pthread_mutex_lock(&task->sync->mtx);
+    bool main_update = nav == task->nav && content.len;
+    nav->pwd.ref->content.text = content;
+    pthread_mutex_unlock(&task->sync->mtx);
+
+    if(main_update) {
+        pthread_mutex_lock(&task->sync_m->mtx);
+        ++task->sync_m->update_do;
+        pthread_cond_signal(&task->sync_m->cond);
+        pthread_mutex_unlock(&task->sync_m->mtx);
+    }
+
+    free(task);
+    return 0;
+}
+
 void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
     ASSERT_ARG(pw);
     ASSERT_ARG(cancel);
@@ -102,6 +131,7 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
     Nav_Directory tmp = {0};
 
     So path = task->nav->pwd.ref->path;
+    //printff("NOT READ: %.*s",SO_F(path));
 
     struct dirent *dir;
     char *cdirname = so_dup(path);
@@ -112,8 +142,10 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
             if(dir->d_name[0] == '.') continue;
             So search = SO;
             so_path_join(&search, path, so_l(dir->d_name));
+            //printff("\r>> %.*s",SO_F(search));
             File_Info *info = file_info_ensure(task->sync_t, search);
             so_free(&search);
+            info->loaded = true;
             Nav_Directory *nav_sub;
             NEW(Nav_Directory, nav_sub);
             nav_sub->parent = task->nav;
@@ -127,10 +159,8 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
 
     Nav_Directory *nav = task->sync->panel_gaki.nav_directory;
     pthread_mutex_lock(&task->sync->mtx);
-    bool main_update = nav == task->nav;
-    if(main_update) {
-        nav->list = tmp.list;
-    }
+    bool main_update = nav == task->nav || task->nav->parent == nav;
+    task->nav->list = tmp.list;
     pthread_mutex_unlock(&task->sync->mtx);
 
     if(main_update) {
@@ -164,6 +194,13 @@ void nav_directory_dispatch_readany(Pw *pw, Gaki_Sync_Main *sync_m, Gaki_Sync_T_
             pw_queue(pw, nav_directory_async_readdir, task);
         } break;
         case S_IFREG: {
+            Task_Nav_Directory_Readreg *task;
+            NEW(Task_Nav_Directory_Readreg, task);
+            task->nav = dir;
+            task->sync = sync;
+            task->sync_m = sync_m;
+            task->sync_t = sync_t;
+            pw_queue(pw, nav_directory_async_readreg, task);
         } break;
         default: break;
     }
