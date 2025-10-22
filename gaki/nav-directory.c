@@ -141,7 +141,7 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
         while((dir = readdir(d)) != NULL) {
             if(dir->d_name[0] == '.') continue;
             So search = SO;
-            so_path_join(&search, path, so_l(dir->d_name));
+            so_path_join(&search, so_ensure_dir(path), so_l(dir->d_name));
             //printff("\r>> %.*s",SO_F(search));
             File_Info *info = file_info_ensure(task->sync_t, search);
             so_free(&search);
@@ -204,6 +204,18 @@ void nav_directory_dispatch_readany(Pw *pw, Gaki_Sync_Main *sync_m, Gaki_Sync_T_
         } break;
         default: break;
     }
+
+    if(!dir->parent) {
+        So path = so_clone(so_rsplit_ch(dir->pwd.ref->path, PLATFORM_CH_SUBDIR, 0));
+        if(!so_len(path)) so_copy(&path, so(PLATFORM_S_SUBDIR));
+        if(so_len(path) < so_len(dir->pwd.ref->path)) {
+            //printff("\r[%.*s] -> PARENT:[%.*s]",SO_F(dir->pwd.ref->path),SO_F(path));sleep(1);
+            File_Info *info = file_info_ensure(sync_t, path);
+            NEW(Nav_Directory, dir->parent);
+            dir->parent->pwd.ref = info;
+            nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, dir->parent);
+        }
+    }
 }
 
 void *nav_directory_async_register(Pw *pw, bool *cancel, void *void_task) {
@@ -227,10 +239,9 @@ void *nav_directory_async_register(Pw *pw, bool *cancel, void *void_task) {
     pthread_mutex_unlock(&task->sync->mtx);
 
     pthread_mutex_lock(&task->sync_m->mtx);
-    ++task->sync_m->update_do;
+    ++task->sync_m->render_do;
     pthread_cond_signal(&task->sync_m->cond);
     pthread_mutex_unlock(&task->sync_m->mtx);
-
 
     free(task);
     return 0;

@@ -346,8 +346,8 @@ int main(int argc, char **argv) {
 #if 0
             ++gaki.sync_main.update_do;
             gaki.ac.select_down = 1;
-            //gaki.ac.select_right = fast_rand() % 3;
-            //gaki.ac.select_left = fast_rand() % 2;
+            gaki.ac.select_right = fast_rand() % 3;
+            gaki.ac.select_left = fast_rand() % 2;
 #endif
             if(gaki.resized) {
                 gaki.sync_main.update_do = true;
