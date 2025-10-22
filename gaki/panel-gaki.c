@@ -5,35 +5,33 @@
 #include "panel-gaki.h"
 #include "gaki.h"
 
-#if 0
 void panel_gaki_select_up(Panel_Gaki *panel, size_t n) {
-    if(!panel->panel_file) return;
-    if(!panel->panel_file->select) {
-        panel->panel_file->select = file_infos_length(panel->panel_file->file_infos) - 1;
-        panel->panel_file->offset = panel->panel_file->select + 1 > panel->layout.rc_files.dim.y ? panel->panel_file->select + 1 - panel->layout.rc_files.dim.y : 0;
+    if(!panel->nav_directory) return;
+    if(!panel->nav_directory->index) {
+        panel->nav_directory->index = array_len(panel->nav_directory->list) - 1;
+        panel->nav_directory->offset = panel->nav_directory->index + 1 > panel->layout.rc_files.dim.y ? panel->nav_directory->index + 1 - panel->layout.rc_files.dim.y : 0;
     } else {
-        --panel->panel_file->select;
-        if(panel->panel_file->offset) {
-            --panel->panel_file->offset;
+        --panel->nav_directory->index;
+        if(panel->nav_directory->offset) {
+            --panel->nav_directory->offset;
         }
     }
 }
 
 void panel_gaki_select_down(Panel_Gaki *panel, size_t n) {
-    if(!panel->panel_file) return;
-    ++panel->panel_file->select;
-    if(panel->panel_file->select >= file_infos_length(panel->panel_file->file_infos)) {
-        panel->panel_file->select = 0;
-        panel->panel_file->offset = 0;
+    if(!panel->nav_directory) return;
+    ++panel->nav_directory->index;
+    if(panel->nav_directory->index >= array_len(panel->nav_directory->list)) {
+        panel->nav_directory->index = 0;
+        panel->nav_directory->offset = 0;
     }
-    if(panel->panel_file->select >= panel->panel_file->offset + panel->layout.rc_files.dim.y) {
-        ++panel->panel_file->offset;
+    if(panel->nav_directory->index >= panel->nav_directory->offset + panel->layout.rc_files.dim.y) {
+        ++panel->nav_directory->offset;
     }
 }
 
 void panel_gaki_select_at(Panel_Gaki *panel, size_t n) {
 }
-#endif
 
 void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *config) {
 
@@ -198,13 +196,22 @@ void *task_panel_file_read_dir(Pw *pw, bool *quit, void *void_task) {
 }
 
 
-void panel_gaki_update(Gaki *gaki, Panel_Gaki *panel, Action *ac) {
+void panel_gaki_update(Gaki_Sync_Panel *sync, Action *ac) {
+
+    pthread_mutex_lock(&sync->mtx);
+
+    panel_gaki_layout_from_rules(&sync->panel_gaki.layout, &sync->panel_gaki.config);
+
+    if(ac->select_up) {
+        panel_gaki_select_up(&sync->panel_gaki, ac->select_up);
+    }
+
+    if(ac->select_down) {
+        panel_gaki_select_down(&sync->panel_gaki, ac->select_down);
+    }
+
 
 #if 0
-    pthread_mutex_lock(&gaki->sync_panel.mtx);
-
-    panel_gaki_layout_from_rules(&panel->layout, &panel->config);
-
     if(ac->select_left) {
         So left = so_ensure_dir(so_rsplit_ch(panel->path, PLATFORM_CH_SUBDIR, 0));
         if(left.len) {
@@ -312,14 +319,6 @@ void panel_gaki_update(Gaki *gaki, Panel_Gaki *panel, Action *ac) {
 #endif
     }
 
-    if(ac->select_up) {
-        panel_gaki_select_up(panel, ac->select_up);
-    }
-
-    if(ac->select_down) {
-        panel_gaki_select_down(panel, ac->select_down);
-    }
-
     if(panel->panel_file && panel->panel_file->select < file_infos_length(panel->panel_file->file_infos)) {
         File_Info *current = file_infos_get_at(&panel->panel_file->file_infos, panel->panel_file->select);
 #if 0
@@ -350,9 +349,9 @@ void panel_gaki_update(Gaki *gaki, Panel_Gaki *panel, Action *ac) {
         }
 #endif
     }
-
-    pthread_mutex_unlock(&gaki->sync_panel.mtx);
 #endif
+
+    pthread_mutex_unlock(&sync->mtx);
 }
 
 
@@ -366,8 +365,7 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
 #if 1
 
     Panel_Gaki *panel = &sync->panel_gaki;
-    Tui_Rect dim = { .dim = buffer->dimension };
-    dim.dim.y = 1;
+    Tui_Rect rc;
 
     pthread_mutex_lock(&sync->mtx);
     if(!panel->nav_directory) goto exit;
@@ -378,14 +376,54 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     Nav_File_Info *pwd = &nav->pwd;
     if(!pwd->ref) goto exit;
 
-    tui_buffer_draw(buffer, dim, 0, 0, 0, pwd->ref->path);
-
-    for(size_t i = 0; i < array_len(nav->list); ++i) {
+    /* print file list */
+    Tui_Color dir_fg = { .type = TUI_COLOR_8, .col8 = 0 };
+    Tui_Color dir_bg = { .type = TUI_COLOR_8, .col8 = 7 };
+    rc = panel->layout.rc_files;
+    rc.dim.y = 1;
+    size_t list_len = array_len(nav->list);
+    for(size_t i = nav->offset; i < list_len; ++i) {
+        if(rc.anc.y >= buffer->dimension.y) break;
         Nav_Directory *nav_sub = array_at(nav->list, i);
-        ++dim.anc.y;
+        Tui_Color *fg = (nav->index == i) ? &dir_fg : 0;
+        Tui_Color *bg = (nav->index == i) ? &dir_bg : 0;
         so_clear(&tmp);
         so_fmt(&tmp, "%.*s", SO_F(so_get_nodir(nav_sub->pwd.ref->path)));
-        tui_buffer_draw(buffer, dim, 0, 0, 0, tmp);
+        tui_buffer_draw(buffer, rc, fg, bg, 0, tmp);
+        ++rc.anc.y;
+    }
+
+    /* draw current dir/file/type */
+    Tui_Color bar_bg = { .type = TUI_COLOR_8, .col8 = 1 };
+    Tui_Color bar_fg = { .type = TUI_COLOR_8, .col8 = 7 };
+    Tui_Fx bar_fx = { .bold = true };
+    Nav_Directory *current = nav->index < list_len ? array_at(nav->list, nav->index) : 0;
+    if(current && nav->pwd.ref) {
+
+        // so_clear(tmp);
+        // so_fmt(tmp, "%.*s (frame %zu)", SO_F(current->path), panel->gaki->frames);
+        // tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, *tmp);
+
+#if 1
+        so_clear(&tmp);
+        Tui_Rect rc_mode = panel->layout.rc_pwd;
+        if(S_ISDIR(current->pwd.ref->stats.st_mode)) {
+            so_fmt(&tmp, "[DIR]");
+            bar_bg.col8 = 4;
+        } else if(S_ISREG(current->pwd.ref->stats.st_mode)) {
+            so_fmt(&tmp, "[FILE]");
+            bar_bg.col8 = 5;
+        } else {
+            so_fmt(&tmp, "[?]");
+        }
+        rc_mode.dim.x = tmp.len;
+        rc_mode.anc.x = buffer->dimension.x - rc_mode.dim.x;
+        tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, current->pwd.ref->path);
+        tui_buffer_draw(buffer, rc_mode, &bar_fg, &bar_bg, &bar_fx, tmp);
+#endif
+
+    } else {
+        tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, nav->pwd.ref->path);
     }
 
 exit:
@@ -437,39 +475,6 @@ exit:
     //panel_directory_render(buffer, panel->layout.rc_files, panel->directory);
 #endif
 
-#if 1
-    /* draw current dir/file/type */
-    Tui_Color bar_bg = { .type = TUI_COLOR_8, .col8 = 1 };
-    Tui_Color bar_fg = { .type = TUI_COLOR_8, .col8 = 7 };
-    Tui_Fx bar_fx = { .bold = true };
-    if(current) {
-
-        // so_clear(tmp);
-        // so_fmt(tmp, "%.*s (frame %zu)", SO_F(current->path), panel->gaki->frames);
-        // tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, *tmp);
-
-#if 0
-        so_clear(&tmp);
-        Tui_Rect rc_mode = panel->layout.rc_pwd;
-        if(S_ISDIR(current->ref->stats.st_mode)) {
-            so_fmt(&tmp, "[DIR]");
-            bar_bg.col8 = 4;
-        } else if(S_ISREG(current->ref->stats.st_mode)) {
-            so_fmt(&tmp, "[FILE]");
-            bar_bg.col8 = 5;
-        } else {
-            so_fmt(&tmp, "[?]");
-        }
-        rc_mode.dim.x = tmp.len;
-        rc_mode.anc.x = buffer->dimension.x - rc_mode.dim.x;
-        tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, current->ref->path);
-        tui_buffer_draw(buffer, rc_mode, &bar_fg, &bar_bg, &bar_fx, tmp);
-#endif
-
-    } else {
-        //tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, panel->path);
-    }
-#endif
 #endif
 
     so_free(&tmp);
