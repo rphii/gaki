@@ -128,6 +128,7 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
     while(!*quit) {
 
         pthread_mutex_lock(&gaki->sync_draw.mtx);
+        ++gaki->sync_draw.draw_done;
         if(gaki->sync_draw.draw_done >= gaki->sync_draw.draw_do) {
             gaki->sync_draw.draw_do = 0;
             gaki->sync_draw.draw_done = 0;
@@ -184,9 +185,8 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
         }
         ++gaki->frames;
 
-        pthread_mutex_lock(&gaki->sync_draw.mtx);
-        ++gaki->sync_draw.draw_done;
-        pthread_mutex_unlock(&gaki->sync_draw.mtx);
+        //pthread_mutex_lock(&gaki->sync_draw.mtx);
+        //pthread_mutex_unlock(&gaki->sync_draw.mtx);
     }
     return 0;
 }

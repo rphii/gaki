@@ -177,11 +177,15 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
 
     /* done, apply */
     pthread_mutex_lock(&task->sync->mtx);
-    bool main_render = nav == task->nav || task->nav->parent == nav;
+    bool main_update = nav == task->nav;
+    bool main_render = task->nav->parent == nav;
     task->nav->list = tmp.list;
     task->nav->index = index;
     pthread_mutex_unlock(&task->sync->mtx);
 
+    if(main_update) {
+        tui_sync_main_update(task->sync_m);
+    }
     if(main_render) {
         tui_sync_main_render(task->sync_m);
     }
@@ -281,7 +285,6 @@ void *nav_directory_async_register(Pw *pw, bool *cancel, void *void_task) {
         nav_directory_dispatch_readany(pw, task->sync_m, task->sync_t, task->sync, nav);
     }
     pthread_mutex_unlock(&task->sync->mtx);
-    tui_sync_main_update(task->sync_m);
 
     free(task);
     return 0;
