@@ -16,12 +16,22 @@ meson install -C build
 - async reading of: _REGULAR FILES_ (blue bar), utilizing a task queue
 - async input
 - async output
-- 10k+ fps
+- 10k+ fps _(`-O3 -march=native -flto=auto -DNDEBUG` and spamming random inputs in code)_
 - remembers the selected index when browsing the directory tree
-- vim-binds: `j` (down), `k` (up), `h` (left), `l` (right)
 - mouse support
 - sorted directory preview
 - resizable window
+
+## ⌨️ Hotkeys
+
+- `q` exit program
+- `h` exit folder
+- `j` file down
+- `k` file up
+- `l` enter folder or file via. `$EDITOR`
+- `K` create tab
+- `L` next tab
+- `H` previous tab
 
 ### SOON™
 
@@ -29,6 +39,6 @@ meson install -C build
 - help for shortkeys
 - remap shortkeys
 - multi-select is basically already in the code - it just has no application so far
-- multiple panels
+- multiple panels basically already in the code via. tabs, but I do want multi-panels as well
 - other directory sorting methods
 
