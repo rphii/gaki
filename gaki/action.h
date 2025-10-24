@@ -1,5 +1,6 @@
 #ifndef ACTION_H
 
+#include <stdbool.h>
 #include <sys/types.h>
 #include <rltui/tui-point.h>
 
@@ -8,6 +9,7 @@ typedef struct Action {
     ssize_t select_down;
     ssize_t select_left;
     ssize_t select_right;
+    bool quit;
 } Action;
 
 typedef enum {
