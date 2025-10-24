@@ -12,6 +12,29 @@
 
 #include "gaki.h"
 
+static unsigned int g_seed;
+
+// Used to seed the generator.           
+void fast_srand(int seed);
+inline void fast_srand(int seed) {
+    g_seed = seed;
+}
+
+// Compute a pseudorandom integer.
+// Output value in range [0, 32767]
+inline int fast_rand(void) {
+    g_seed = (214013*g_seed+2531011);
+    return (g_seed>>16)&0x7FFF;
+}
+int fast_rand(void);
+
+Tui_Rect tui_rect(ssize_t anc_x, ssize_t anc_y, ssize_t dim_x, ssize_t dim_y) {
+    return (Tui_Rect){
+        .anc = (Tui_Point){ .x = anc_x, .y = anc_y },
+        .dim = (Tui_Point){ .x = dim_x, .y = dim_y },
+    };
+}
+
 double timeval_d(struct timeval v) {
     return (double)v.tv_sec + (double)v.tv_usec * 1e-6;
 }
@@ -59,9 +82,14 @@ void handle_resize(Gaki *gaki) {
         .y = w.ws_row,
     };
 
-    gaki->panel_gaki.config.rc = (Tui_Rect){ .dim = dimension };
+    Tui_Point dimension_prev = gaki->buffer.dimension;
+    if(!tui_point_cmp(dimension_prev, dimension)) {
+        return;
+    }
 
+    gaki->sync_panel.panel_gaki.config.rc = (Tui_Rect){ .dim = dimension };
     tui_buffer_resize(&gaki->buffer, dimension);
+    tui_sync_main_render(&gaki->sync_main);
 }
 
 Tui_Point tui_rect_project_point(Tui_Rect rc, Tui_Point pt) {
@@ -73,95 +101,24 @@ Tui_Point tui_rect_project_point(Tui_Rect rc, Tui_Point pt) {
 
 void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
     Gaki *gaki = void_ctx;
-    bool resize_split = false;
     for(;;) {
-        gaki->input_prev = gaki->input_curr;
-        //printff("getting input..\r");
-        if(gaki->quit) break;
-        if(tui_input_process(&gaki->input_curr)) {
-            if(gaki->input_curr.id == INPUT_TEXT && gaki->input_curr.text.len == 1) {
-                switch(gaki->input_curr.text.str[0]) {
-                    case 'q': gaki->quit = true; break;
-                    case 'j': gaki->ac.select_down = 1; break;
-                    case 'k': gaki->ac.select_up = 1; break;
-                    case 'h': gaki->ac.select_left = 1; break;
-                    case 'l': gaki->ac.select_right = 1; break;
-                    //case '/': gaki->ac. = 1; break;
-                    default: break;
-                }
-            }
-            if(gaki->input_curr.id == INPUT_KEY) {
-                if(gaki->input_curr.key == KEY_UP) {
-                    gaki->ac.select_up = 1;
-                }
-                if(gaki->input_curr.key == KEY_DOWN) {
-                    gaki->ac.select_down = 1;
-                }
-                if(gaki->input_curr.key == KEY_LEFT) {
-                    gaki->ac.select_left = 1;
-                }
-                if(gaki->input_curr.key == KEY_RIGHT) {
-                    gaki->ac.select_right = 1;
-                }
-            }
 
-            if(gaki->input_curr.id == INPUT_MOUSE) {
-                if(tui_rect_encloses_point(gaki->panel_gaki.layout.rc_files, gaki->input_curr.mouse.pos)) {
-                    if(gaki->input_curr.mouse.scroll > 0) {
-                        gaki->ac.select_down = 1;
-                    } else if(gaki->input_curr.mouse.scroll < 0) {
-                        gaki->ac.select_up = 1;
-                    }
-                }
-                if(gaki->input_curr.mouse.l) {
-                    if(tui_rect_encloses_point(gaki->panel_gaki.layout.rc_files, gaki->input_curr.mouse.pos)) {
-                        Tui_Point pt = tui_rect_project_point(gaki->panel_gaki.layout.rc_files, gaki->input_curr.mouse.pos);
-                        if(gaki->panel_gaki.panel_file) {
-                            gaki->panel_gaki.panel_file->select = pt.y + gaki->panel_gaki.panel_file->offset;
-                        }
-                    }
-                }
-                if(gaki->input_curr.mouse.m) {
-                }
-                if(gaki->input_curr.mouse.r) {
-                    if(!gaki->input_prev.mouse.r) {
-                    }
-                    if(resize_split) {
-                    }
-                } else {
-                    resize_split = false;
-                }
-            }
-            pthread_mutex_lock(&gaki->sync_main.mtx);
-            ++gaki->sync_main.update_do;
-            pthread_cond_signal(&gaki->sync_main.cond);
-            pthread_mutex_unlock(&gaki->sync_main.mtx);
-        }
+#if 0
+        Tui_Input sim = { .id = INPUT_TEXT, .key = INPUT_STATE_PRESS };
+        int rnd = fast_rand() % 4;
+        if(rnd == 0) sim.text = so("h");
+        if(rnd == 1) sim.text = so("j");
+        if(rnd == 2) sim.text = so("k");
+        if(rnd == 3) sim.text = so("l");
+        pthread_mutex_lock(&gaki->sync_input.mtx);
+        array_push(gaki->sync_input.inputs, sim);
+        pthread_mutex_unlock(&gaki->sync_input.mtx);
+        tui_sync_main_update(&gaki->sync_main);
+#endif
+
+        if(!tui_input_process(&gaki->sync_main, &gaki->sync_input, &gaki->input_gen)) break;
     }
     return 0;
-}
-
-static unsigned int g_seed;
-
-// Used to seed the generator.           
-void fast_srand(int seed);
-inline void fast_srand(int seed) {
-    g_seed = seed;
-}
-
-// Compute a pseudorandom integer.
-// Output value in range [0, 32767]
-inline int fast_rand(void) {
-    g_seed = (214013*g_seed+2531011);
-    return (g_seed>>16)&0x7FFF;
-}
-int fast_rand(void);
-
-Tui_Rect tui_rect(ssize_t anc_x, ssize_t anc_y, ssize_t dim_x, ssize_t dim_y) {
-    return (Tui_Rect){
-        .anc = (Tui_Point){ .x = anc_x, .y = anc_y },
-        .dim = (Tui_Point){ .x = dim_x, .y = dim_y },
-    };
 }
 
 void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
@@ -171,6 +128,7 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
     while(!*quit) {
 
         pthread_mutex_lock(&gaki->sync_draw.mtx);
+        ++gaki->sync_draw.draw_done;
         if(gaki->sync_draw.draw_done >= gaki->sync_draw.draw_do) {
             gaki->sync_draw.draw_do = 0;
             gaki->sync_draw.draw_done = 0;
@@ -180,7 +138,12 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
         }
         bool draw_busy = gaki->sync_draw.draw_skip;
         bool draw_do = gaki->sync_draw.draw_do;
+        bool draw_redraw = gaki->sync_draw.draw_redraw;
         gaki->sync_draw.draw_skip = 0;
+        //if(draw_busy && gaki->frames > 4) exit(1);
+        if(draw_do && !draw_busy && draw_redraw) {
+            gaki->sync_draw.draw_redraw = 0;
+        }
         pthread_mutex_unlock(&gaki->sync_draw.mtx);
 
         if(draw_busy) {
@@ -194,12 +157,19 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
         if(!draw_do) continue;
 
         so_clear(&draw);
+
+        if(draw_redraw) {
+            memset(gaki->screen.old.cells, 0, sizeof(Tui_Cell) * gaki->buffer.dimension.x * gaki->buffer.dimension.y);
+            so_extend(&draw, so(TUI_ESC_CODE_CURSOR_HIDE));
+        }
+
         tui_screen_fmt(&draw, &gaki->screen);
 
         ssize_t len = draw.len;
         ssize_t written = 0;
         char *begin = so_it0(draw);
         while(written < len) {
+            //break;
             errno = 0;
             ssize_t written_chunk = write(STDOUT_FILENO, begin, len - written);
             if(written_chunk > 0) {
@@ -215,9 +185,8 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
         }
         ++gaki->frames;
 
-        pthread_mutex_lock(&gaki->sync_draw.mtx);
-        ++gaki->sync_draw.draw_done;
-        pthread_mutex_unlock(&gaki->sync_draw.mtx);
+        //pthread_mutex_lock(&gaki->sync_draw.mtx);
+        //pthread_mutex_unlock(&gaki->sync_draw.mtx);
     }
     return 0;
 }
@@ -228,10 +197,6 @@ int main(int argc, char **argv) {
 
     So out = SO;
     Gaki gaki = { .resized = true, .sync_main.update_do = true };
-
-    if(argc >= 2) {
-        gaki.panel_gaki.pwd = so_ensure_dir(so_clone(so_l(argv[1])));
-    }
 
     gaki_global_set(&gaki);
 
@@ -248,7 +213,14 @@ int main(int argc, char **argv) {
     pw_init(&gaki.pw_task, 4);
     pw_dispatch(&gaki.pw_task);
 
-    gaki.panel_gaki.gaki = &gaki;
+    if(argc >= 2) {
+        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, so_l(argv[1]));
+    } else {
+        So pwd = SO;
+        so_env_get(&pwd, so("PWD"));
+        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, pwd);
+        so_free(&pwd);
+    }
 
     fast_srand(time(0));
 
@@ -263,14 +235,22 @@ int main(int argc, char **argv) {
 
         if(update_do) {
             handle_resize(&gaki);
-            panel_gaki_update(&gaki.panel_gaki, &gaki.ac);
-            memset(&gaki.ac, 0, sizeof(gaki.ac));
+
+            bool render = false;
+            tui_input_get_stack(&gaki.sync_input, &gaki.inputs);
+            while(!gaki.quit && array_len(gaki.inputs)) {
+                Tui_Input input = array_pop(gaki.inputs);
+                render |= panel_gaki_input(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, &gaki.sync_input, &gaki.sync_draw, &input, &gaki.quit);
+            }
+            panel_gaki_update(&gaki.pw_task, &gaki.sync_panel, &gaki.sync_main, &gaki.sync_t_file_info);
 
             pthread_mutex_lock(&gaki.sync_main.mtx);
             ++gaki.sync_main.update_done;
-            ++gaki.sync_main.render_do;
+            if(render || !gaki.frames) ++gaki.sync_main.render_do;
             pthread_mutex_unlock(&gaki.sync_main.mtx);
         }
+
+        if(gaki.quit) break;
 
         pthread_mutex_lock(&gaki.sync_draw.mtx);
         bool draw_busy = gaki.sync_draw.draw_done < gaki.sync_draw.draw_do;
@@ -290,7 +270,14 @@ int main(int argc, char **argv) {
 
         if(render_do && !draw_busy) {
             tui_buffer_clear(&gaki.buffer);
-            panel_gaki_render(&gaki.buffer, &gaki.panel_gaki);
+            panel_gaki_render(&gaki.buffer, &gaki.sync_panel);
+
+#if 0
+            So tmp = SO;
+            so_fmt(&tmp, "[%zu]", gaki.frames);
+            tui_buffer_draw(&gaki.buffer, (Tui_Rect){ .dim = gaki.screen.dimension}, 0, 0, 0, tmp);
+            so_free(&tmp);
+#endif
 
             pthread_mutex_lock(&gaki.sync_main.mtx);
             ++gaki.sync_main.render_done;
@@ -317,25 +304,20 @@ int main(int argc, char **argv) {
             gaki.sync_main.update_done = 0;
         }
         while(!gaki.sync_main.update_do && !gaki.sync_main.render_do) {
-#if 0
-            ++gaki.sync_main.update_do;
-            gaki.ac.select_down = 1;
-            gaki.ac.select_right = fast_rand() % 3;
-            gaki.ac.select_left = fast_rand() % 2;
-#endif
             if(gaki.resized) {
                 gaki.sync_main.update_do = true;
                 break;
             } else {
                 pthread_cond_wait(&gaki.sync_main.cond, &gaki.sync_main.mtx);
             }
-            //gaki.resized = true;
         }
         pthread_mutex_unlock(&gaki.sync_main.mtx);
 #endif
     }
 
     clock_gettime(CLOCK_REALTIME, &gaki.tE);
+
+    tui_sync_input_quit(&gaki.sync_input);
 
     gaki_free(&gaki);
 
