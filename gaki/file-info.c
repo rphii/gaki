@@ -55,7 +55,7 @@ File_Info *file_info_ensure(Gaki_Sync_T_File_Info *sync, So path) {
         char *cpath = so_dup(path);
         stat(cpath, &info_new.stats);
         free(cpath);
-        info = t_file_info_once(&sync->t_file_info, path, &info_new)->val;
+        info = t_file_info_once(&sync->t_file_info, info_new.path, &info_new)->val;
     }
     pthread_rwlock_unlock(&sync->rwl);
     return info;
