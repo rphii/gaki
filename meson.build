@@ -1,3 +1,3 @@
-project('gaki', 'c', meson_version: '>=1.1', version: '9999')
+project('gaki', 'c', meson_version: '>=1.1', version: '0.0.1')
 subdir('gaki')
 
