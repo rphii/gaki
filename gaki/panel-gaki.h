@@ -33,7 +33,7 @@ void panel_gaki_select_up(Panel_Gaki *st, size_t n);
 void panel_gaki_select_down(Panel_Gaki *st, size_t n);
 void panel_gaki_select_at(Panel_Gaki *st, size_t n);
 void panel_gaki_update(Pw *pw, Gaki_Sync_Panel *sync, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t);
-bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, Tui_Input *input, bool *quit);
+bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, Tui_Sync_Input *sync_i, Tui_Sync_Draw *sync_d, Tui_Input *input, bool *quit);
 
 void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *gaki);
 
