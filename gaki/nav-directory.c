@@ -265,10 +265,13 @@ void *nav_directory_async_register(Pw *pw, bool *cancel, void *void_task) {
         NEW(Nav_Directory, nav);
         nav->pwd.ref = info;
         task->sync->panel_gaki.nav_directory = nav;
+        task->sync->panel_gaki.tab_sel = array_len(task->sync->panel_gaki.tabs);
+        array_push(task->sync->panel_gaki.tabs, nav);
         nav_directory_dispatch_readany(pw, task->sync_m, task->sync_t, task->sync, nav);
     }
     pthread_mutex_unlock(&task->sync->mtx);
     tui_sync_main_update(task->sync_m);
+
 
     free(task);
     return 0;
@@ -286,9 +289,7 @@ void nav_directory_dispatch_register(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_
 
     ASSERT_ARG(!task->sync->count_register);
 
-    pthread_mutex_lock(&task->sync->mtx);
     task->current_register = ++task->sync->count_register;
-    pthread_mutex_unlock(&task->sync->mtx);
 
     pw_queue(pw, nav_directory_async_register, task);
 }

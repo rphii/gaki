@@ -9,6 +9,9 @@ typedef struct Action {
     ssize_t select_down;
     ssize_t select_left;
     ssize_t select_right;
+    bool tab_prev;
+    bool tab_next;
+    bool tab_new;
     bool quit;
 } Action;
 
