@@ -1,8 +1,8 @@
 #include "file-info.h"
 #include "gaki-sync.h"
 
-VEC_IMPLEMENT_BASE(File_Infos, file_infos, File_Info, BY_REF, 0);
-VEC_IMPLEMENT_SORT(File_Infos, file_infos, File_Info, BY_REF, file_info_cmp);
+//VEC_IMPLEMENT_BASE(File_Infos, file_infos, File_Info, BY_REF, 0);
+//VEC_IMPLEMENT_SORT(File_Infos, file_infos, File_Info, BY_REF, file_info_cmp);
 LUT_IMPLEMENT(T_File_Info, t_file_info, So, BY_VAL, File_Info, BY_REF, so_hash, so_cmp, 0, file_info_free);
 
 int file_info_cmp(File_Info *a, File_Info *b) {
@@ -13,7 +13,7 @@ void file_info_free(File_Info *a) {
     so_free(&a->path);
     switch(a->stats.st_mode & S_IFMT) {
         case S_IFREG: so_free(&a->content.text); break;
-        case S_IFDIR: file_infos_free(a->content.files); break;
+        case S_IFDIR: array_free(a->content.files); break;
         default: break;
     }
 }

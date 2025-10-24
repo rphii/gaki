@@ -121,32 +121,43 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
     So path = task->nav->pwd.ref->path;
     //printff("NOT READ: %.*s",SO_F(path));
 
-    struct dirent *dir;
-    char *cdirname = so_dup(path);
-    DIR *d = opendir(cdirname);
-    free(cdirname);
-    if(d) {
-        while((dir = readdir(d)) != NULL) {
-            if(dir->d_name[0] == '.') continue;
+    size_t files_len = array_len(task->nav->pwd.ref->content.files);
+
+    if(!files_len) {
+        struct dirent *dir;
+        char *cdirname = so_dup(path);
+        DIR *d = opendir(cdirname);
+        free(cdirname);
+        if(d) {
             So search = SO;
-            so_path_join(&search, so_ensure_dir(path), so_l(dir->d_name));
-            //usleep(1e5);printff("\r>> %.*s",SO_F(search));
-            File_Info *info = file_info_ensure(task->sync_t, search);
-            so_free(&search);
-            info->loaded = true;
-            Nav_Directory *nav_sub;
-            if(task->child && task->child->pwd.ref == info) {
-                nav_sub = task->child;
-                //sleep(1);printff("\r[%.*s]->[%.*s]", SO_F(task->nav->pwd.ref->path), SO_F(nav_sub->pwd.ref->path));sleep(1);
-            } else {
-                NEW(Nav_Directory, nav_sub);
-                nav_sub->pwd.ref = info;
+            while((dir = readdir(d)) != NULL) {
+                if(dir->d_name[0] == '.') continue;
+                so_clear(&search);
+                so_path_join(&search, so_ensure_dir(path), so_l(dir->d_name));
+                //usleep(1e5);printff("\r>> %.*s",SO_F(search));
+                File_Info *info = file_info_ensure(task->sync_t, search);
+                array_push(task->nav->pwd.ref->content.files, info);
+                info->loaded = true;
             }
-            nav_sub->parent = task->nav;
-            array_push(tmp.list, nav_sub);
-            ++len_list;
+            so_free(&search);
+            closedir(d);
         }
-        closedir(d);
+        files_len = array_len(task->nav->pwd.ref->content.files);
+    }
+
+    for(size_t i = 0; i < files_len; ++i) {
+        File_Info *info = array_at(task->nav->pwd.ref->content.files, i);
+        Nav_Directory *nav_sub;
+        if(task->child && task->child->pwd.ref == info) {
+            nav_sub = task->child;
+            //sleep(1);printff("\r[%.*s]->[%.*s]", SO_F(task->nav->pwd.ref->path), SO_F(nav_sub->pwd.ref->path));sleep(1);
+        } else {
+            NEW(Nav_Directory, nav_sub);
+            nav_sub->pwd.ref = info;
+        }
+        nav_sub->parent = task->nav;
+        array_push(tmp.list, nav_sub);
+        ++len_list;
     }
 
     nav_directories_sort(tmp.list);
