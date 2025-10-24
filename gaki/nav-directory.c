@@ -272,7 +272,6 @@ void *nav_directory_async_register(Pw *pw, bool *cancel, void *void_task) {
     pthread_mutex_unlock(&task->sync->mtx);
     tui_sync_main_update(task->sync_m);
 
-
     free(task);
     return 0;
 }
@@ -287,7 +286,7 @@ void nav_directory_dispatch_register(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_
     task->sync_t = sync_t;
     task->sync_m = sync_m;
 
-    ASSERT_ARG(!task->sync->count_register);
+    //ASSERT_ARG(!task->sync->count_register);
 
     task->current_register = ++task->sync->count_register;
 

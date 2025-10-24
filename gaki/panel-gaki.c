@@ -78,7 +78,7 @@ void panel_gaki_update(Pw *pw, Gaki_Sync_Panel *sync, Tui_Sync_Main *sync_m, Gak
         }
     }
 
-    if(!nav->parent) {
+    if(nav && !nav->parent) {
         So path = so_clone(so_rsplit_ch(nav->pwd.ref->path, PLATFORM_CH_SUBDIR, 0));
         if(!so_len(path)) so_copy(&path, so(PLATFORM_S_SUBDIR));
         if(so_len(path) < so_len(nav->pwd.ref->path)) {
