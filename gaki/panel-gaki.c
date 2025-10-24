@@ -263,7 +263,11 @@ bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync
         if(len > 1) {
             *array_it(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel) = sync->panel_gaki.nav_directory;
             --sync->panel_gaki.tab_sel;
-            sync->panel_gaki.tab_sel %= len;
+            if(sync->panel_gaki.tab_sel == SIZE_MAX) {
+                sync->panel_gaki.tab_sel = len - 1;
+            } else {
+                sync->panel_gaki.tab_sel %= len;
+            }
             sync->panel_gaki.nav_directory = array_at(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel);
             any = true;
         }

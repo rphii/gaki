@@ -4,10 +4,11 @@
 #include <sys/stat.h>
 
 typedef struct File_Info File_Info;
+typedef struct File_Info *File_Infos;
 typedef struct Gaki_Sync_T_File_Info Gaki_Sync_T_File_Info;
 
-VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, BASE);
-VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, SORT);
+//VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, BASE);
+//VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, SORT);
 LUT_INCLUDE(T_File_Info, t_file_info, So, BY_VAL, File_Info, BY_REF);
 
 typedef struct File_Info {
@@ -18,7 +19,7 @@ typedef struct File_Info {
         File_Infos *files;
     } content;
     bool loaded;
-} File_Info;
+} File_Info, *File_Infos;
 
 int file_info_cmp(File_Info *a, File_Info *b);
 void file_info_free(File_Info *a);

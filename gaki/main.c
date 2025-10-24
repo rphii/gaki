@@ -139,6 +139,7 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
         bool draw_do = gaki->sync_draw.draw_do;
         bool draw_redraw = gaki->sync_draw.draw_redraw;
         gaki->sync_draw.draw_skip = 0;
+        //if(draw_busy && gaki->frames > 4) exit(1);
         if(draw_do && !draw_busy && draw_redraw) {
             gaki->sync_draw.draw_redraw = 0;
         }
