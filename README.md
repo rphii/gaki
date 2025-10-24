@@ -50,3 +50,4 @@ meson install -C build
 - maybe: integrate fzf?
 - log/errors instead of hard quitting, when e.g. no EDITOR or child failed
 
+
