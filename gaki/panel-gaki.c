@@ -242,6 +242,7 @@ bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync
     if(ac.tab_new) {
         Nav_Directory *nav = sync->panel_gaki.nav_directory;
         if(nav->pwd.ref) {
+            *array_it(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel) = sync->panel_gaki.nav_directory;
             nav_directory_dispatch_register(pw, sync_m, sync_t, sync, nav->pwd.ref->path);
         }
         any = true;
