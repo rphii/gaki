@@ -239,7 +239,7 @@ int main(int argc, char **argv) {
             tui_input_get_stack(&gaki.sync_input, &gaki.inputs);
             while(!gaki.quit && array_len(gaki.inputs)) {
                 Tui_Input input = array_pop(gaki.inputs);
-                render |= panel_gaki_input(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, &input, &gaki.quit);
+                render |= panel_gaki_input(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, &gaki.sync_input, &gaki.sync_draw, &input, &gaki.quit);
             }
             panel_gaki_update(&gaki.pw_task, &gaki.sync_panel, &gaki.sync_main, &gaki.sync_t_file_info);
 
