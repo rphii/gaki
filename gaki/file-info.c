@@ -1,4 +1,5 @@
 #include "file-info.h"
+#include "gaki-sync.h"
 
 VEC_IMPLEMENT_BASE(File_Infos, file_infos, File_Info, BY_REF, 0);
 VEC_IMPLEMENT_SORT(File_Infos, file_infos, File_Info, BY_REF, file_info_cmp);
@@ -44,4 +45,20 @@ char *file_info_relcstr(File_Info *info) {
     }
     return "??B";
 }
+
+File_Info *file_info_ensure(Gaki_Sync_T_File_Info *sync, So path) {
+    pthread_rwlock_wrlock(&sync->rwl);
+    File_Info *info = t_file_info_get(&sync->t_file_info, path);
+    if(!info) {
+        File_Info info_new = {0};
+        info_new.path = so_clone(path);
+        char *cpath = so_dup(path);
+        stat(cpath, &info_new.stats);
+        free(cpath);
+        info = t_file_info_once(&sync->t_file_info, path, &info_new)->val;
+    }
+    pthread_rwlock_unlock(&sync->rwl);
+    return info;
+}
+
 

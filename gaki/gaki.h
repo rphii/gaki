@@ -21,22 +21,21 @@ typedef struct Gaki {
     struct timespec tE;
     size_t frames;
 
-    Tui_Input input_curr;
-    Tui_Input input_prev;
+    Tui_Input_Gen input_gen;
+    Tui_Inputs inputs;
+
     Tui_Screen screen;
     Tui_Buffer buffer;
 
-    Gaki_Sync_Main sync_main;
-    Gaki_Sync_Draw sync_draw;
-    Gaki_Sync_Input sync_input;
+    Tui_Sync_Main sync_main;
+    Tui_Sync_Draw sync_draw;
+    Tui_Sync_Input sync_input;
     Gaki_Sync_Panel sync_panel;
     Gaki_Sync_T_File_Info sync_t_file_info;
 
     Pw pw_main;
     Pw pw_draw;
     Pw pw_task;
-
-    Action ac;
 
     bool quit;
 
