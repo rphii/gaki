@@ -101,7 +101,7 @@ void panel_gaki_update(Pw *pw, Gaki_Sync_Panel *sync, Tui_Sync_Main *sync_m, Gak
     pthread_mutex_unlock(&sync->mtx);
 }
 
-bool panel_gaki_input(Gaki_Sync_Panel *sync, Tui_Input *input, bool *quit) {
+bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, Tui_Input *input, bool *quit) {
 
     pthread_mutex_lock(&sync->mtx);
 
@@ -115,6 +115,9 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Tui_Input *input, bool *quit) {
             case 'k': ac.select_up = 1; break;
             case 'h': ac.select_left = 1; break;
             case 'l': ac.select_right = 1; break;
+            case 'L': ac.tab_next = true; break;
+            case 'H': ac.tab_prev = true; break;
+            case 'K': ac.tab_new = true; break;
             //case '/': gaki->ac. = 1; break;
             default: break;
         }
@@ -249,6 +252,36 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Tui_Input *input, bool *quit) {
         }
     }
 
+    if(ac.tab_new) {
+        Nav_Directory *nav = sync->panel_gaki.nav_directory;
+        if(nav->pwd.ref) {
+            nav_directory_dispatch_register(pw, sync_m, sync_t, sync, nav->pwd.ref->path);
+        }
+        any = true;
+    }
+
+    if(ac.tab_next) {
+        size_t len = array_len(sync->panel_gaki.tabs);
+        if(len > 1) {
+            *array_it(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel) = sync->panel_gaki.nav_directory;
+            ++sync->panel_gaki.tab_sel;
+            sync->panel_gaki.tab_sel %= len;
+            sync->panel_gaki.nav_directory = array_at(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel);
+            any = true;
+        }
+    }
+
+    if(ac.tab_prev) {
+        size_t len = array_len(sync->panel_gaki.tabs);
+        if(len > 1) {
+            *array_it(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel) = sync->panel_gaki.nav_directory;
+            --sync->panel_gaki.tab_sel;
+            sync->panel_gaki.tab_sel %= len;
+            sync->panel_gaki.nav_directory = array_at(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel);
+            any = true;
+        }
+    }
+
     if(ac.select_left) {
         Nav_Directory *nav = sync->panel_gaki.nav_directory;
         if(nav && nav->parent) {
@@ -308,26 +341,29 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     Tui_Color bar_fg = { .type = TUI_COLOR_8, .col8 = 7 };
     Tui_Fx bar_fx = { .bold = true };
     Nav_Directory *current = nav->index < array_len(nav->list) ? array_at(nav->list, nav->index) : 0;
+    size_t tab_len = array_len(panel->tabs);
     if(current && nav->pwd.ref) {
 
-        // so_clear(tmp);
-        // so_fmt(tmp, "%.*s (frame %zu)", SO_F(current->path), panel->gaki->frames);
-        // tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, *tmp);
+        switch(current->pwd.ref->stats.st_mode & S_IFMT) {
+            case S_IFDIR: { bar_bg.col8 = 4; } break;
+            case S_IFREG: { bar_bg.col8 = 5; } break;
+            default: break;
+        }
+
+        so_clear(&tmp);
+        so_fmt(&tmp, "[%zu/%zu] %.*s", panel->tab_sel + 1, tab_len, SO_F(current->pwd.ref->path));
+        tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, tmp);
 
         so_clear(&tmp);
         Tui_Rect rc_mode = panel->layout.rc_pwd;
-        if(S_ISDIR(current->pwd.ref->stats.st_mode)) {
-            so_fmt(&tmp, "[DIR]");
-            bar_bg.col8 = 4;
-        } else if(S_ISREG(current->pwd.ref->stats.st_mode)) {
-            so_fmt(&tmp, "[FILE]");
-            bar_bg.col8 = 5;
-        } else {
-            so_fmt(&tmp, "[?]");
+        switch(current->pwd.ref->stats.st_mode & S_IFMT) {
+            case S_IFDIR: { so_fmt(&tmp, "[DIR]"); } break;
+            case S_IFREG: { so_fmt(&tmp, "[FILE]"); } break;
+            default: { so_fmt(&tmp, "[?]"); } break;
         }
         rc_mode.dim.x = tmp.len;
         rc_mode.anc.x = buffer->dimension.x - rc_mode.dim.x;
-        tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, current->pwd.ref->path);
+        //tui_buffer_draw(buffer, panel->layout.rc_pwd, &bar_fg, &bar_bg, &bar_fx, current->pwd.ref->path);
         tui_buffer_draw(buffer, rc_mode, &bar_fg, &bar_bg, &bar_fx, tmp);
 
     } else {
