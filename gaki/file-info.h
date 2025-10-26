@@ -18,6 +18,7 @@ typedef struct File_Info {
         So text;
         File_Infos *files;
     } content;
+    pthread_mutex_t mtx;
     bool loaded;
 } File_Info, *File_Infos;
 

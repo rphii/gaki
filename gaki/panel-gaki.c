@@ -129,7 +129,7 @@ void panel_gaki_update(Pw *pw, Gaki_Sync_Panel *sync, Tui_Sync_Main *sync_m, Gak
     pthread_mutex_unlock(&sync->mtx);
 }
 
-bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, Tui_Sync_Input *sync_i, Tui_Sync_Draw *sync_d, Tui_Input *input, bool *quit) {
+bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, Tui_Sync_Input *sync_i, Tui_Sync_Draw *sync_d, Tui_Input *input, bool *flush, bool *quit) {
 
     pthread_mutex_lock(&sync->mtx);
 
@@ -251,6 +251,7 @@ bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync
             case S_IFREG: {
 
 #if 1
+                *flush = true;
                 So ed = SO;
                 so_env_get(&ed, so("EDITOR"));
                 if(!so_len(ed)) {
