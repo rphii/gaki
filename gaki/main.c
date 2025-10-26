@@ -87,13 +87,6 @@ void handle_resize(Gaki *gaki) {
     tui_sync_main_render(&gaki->sync_main);
 }
 
-Tui_Point tui_rect_project_point(Tui_Rect rc, Tui_Point pt) {
-    Tui_Point result = pt;
-    result.x -= rc.anc.x;
-    result.y -= rc.anc.y;
-    return result;
-}
-
 void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
     Gaki *gaki = void_ctx;
     for(;;) {
