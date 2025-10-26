@@ -51,7 +51,7 @@ File_Info *file_info_ensure(Gaki_Sync_T_File_Info *sync, So path) {
     File_Info *info = t_file_info_get(&sync->t_file_info, path);
     if(!info) {
         File_Info info_new = {0};
-        info_new.path = so_clone(path);
+        info_new.path = so_clone(so_ensure_dir(path));
         char *cpath = so_dup(path);
         stat(cpath, &info_new.stats);
         free(cpath);
