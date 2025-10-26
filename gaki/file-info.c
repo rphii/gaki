@@ -48,14 +48,20 @@ char *file_info_relcstr(File_Info *info) {
 
 File_Info *file_info_ensure(Gaki_Sync_T_File_Info *sync, So path) {
     pthread_rwlock_wrlock(&sync->rwl);
-    File_Info *info = t_file_info_get(&sync->t_file_info, path);
+    File_Info *info = t_file_info_get(&sync->t_file_info, so_ensure_dir(path));
     if(!info) {
         File_Info info_new = {0};
         info_new.path = so_clone(so_ensure_dir(path));
-        char *cpath = so_dup(path);
+        char *cpath = so_dup(info_new.path);
         stat(cpath, &info_new.stats);
         free(cpath);
-        info = t_file_info_once(&sync->t_file_info, info_new.path, &info_new)->val;
+        T_File_InfoKV *kv = t_file_info_once(&sync->t_file_info, info_new.path, &info_new);
+        if(!kv) {
+            usleep(1e5);
+            printff("unreachable error, lookup table expected: [%.*s] but nothing got", SO_F(info_new.path));
+            tui_die("see above error.");
+        }
+        info = kv->val;
     }
     pthread_rwlock_unlock(&sync->rwl);
     return info;
