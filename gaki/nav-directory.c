@@ -234,34 +234,6 @@ void nav_directory_dispatch_readany(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_F
         } break;
         default: break;
     }
-
-#if 0
-    if(!dir->parent) {
-        So path = so_clone(so_rsplit_ch(dir->pwd.ref->path, PLATFORM_CH_SUBDIR, 0));
-        if(!so_len(path)) so_copy(&path, so(PLATFORM_S_SUBDIR));
-        if(so_len(path) < so_len(dir->pwd.ref->path)) {
-#if 0
-            printff("\r[%.*s] -> PARENT:[%.*s]",SO_F(dir->pwd.ref->path),SO_F(path));sleep(1);
-            File_Info *info = file_info_ensure(sync_t, path);
-            NEW(Nav_Directory, dir->parent);
-            dir->parent->pwd.ref = info;
-            nav_directory_dispatch_readdir(pw, sync_m, sync_t, sync, dir->parent);
-#else
-            File_Info *info = file_info_ensure(sync_t, path);
-            NEW(Nav_Directory, dir->parent);
-            dir->parent->pwd.ref = info;
-
-            Task_Nav_Directory_Readdir *task;
-            NEW(Task_Nav_Directory_Readdir, task);
-            task->nav = dir->parent;
-            task->sync = sync;
-            task->sync_m = sync_m;
-            task->sync_t = sync_t;
-            pw_queue(pw, nav_directory_async_readdir, task);
-#endif
-        }
-    }
-#endif
 }
 
 void *nav_directory_async_register(Pw *pw, bool *cancel, void *void_task) {
