@@ -60,14 +60,9 @@ struct timespec timespec_add_timeval(struct timespec a, struct timeval b) {
 #include <signal.h>
 
 void signal_winch(int x) {
-
     Gaki *gaki = gaki_global_get();
-
-    //if(pthread_mutex_lock(&gaki->sync_main.mtx)) exit(1);
     gaki->resized = true;
-    //++gaki->sync_main.update_do;
     pthread_cond_signal(&gaki->sync_main.cond);
-    //pthread_mutex_unlock(&gaki->sync_main.mtx);
 }
 
 void handle_resize(Gaki *gaki) {
