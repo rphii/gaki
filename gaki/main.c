@@ -172,9 +172,6 @@ void *pw_queue_render(Pw *pw, bool *quit, void *void_ctx) {
             }
         }
         ++gaki->frames;
-
-        //pthread_mutex_lock(&gaki->sync_draw.mtx);
-        //pthread_mutex_unlock(&gaki->sync_draw.mtx);
     }
     return 0;
 }
@@ -202,6 +199,7 @@ int main(int argc, char **argv) {
     pw_dispatch(&gaki.pw_task);
 
     if(argc >= 2) {
+        /* TODO iterate over i and make tabs/splits */
         nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, so_l(argv[1]));
     } else {
         So pwd = SO;
