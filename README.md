@@ -36,9 +36,13 @@ meson install -C build
 ### SOON™
 
 - search for file name
-- help for shortkeys
-- remap shortkeys
+- filter for file name
+- help for hotkeys
+- remap hotkeys
+- user defined program when "opening" files
 - multi-select is basically already in the code - it just has no application so far
+- rename file(s)
 - multiple panels basically already in the code via. tabs, but I do want multi-panels as well
 - other directory sorting methods
+- maybe: integrate fzf?
 
