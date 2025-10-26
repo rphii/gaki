@@ -148,7 +148,7 @@ bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync
             case 'l': ac.select_right = 1; break;
             case 'L': ac.tab_next = true; break;
             case 'H': ac.tab_prev = true; break;
-            case 'K': ac.tab_new = true; break;
+            case 't': ac.tab_new = true; break;
             //case '/': gaki->ac. = 1; break;
             default: break;
         }
