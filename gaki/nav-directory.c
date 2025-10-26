@@ -89,10 +89,21 @@ void *nav_directory_async_readreg(Pw *pw, bool *cancel, void *void_task) {
     ASSERT_ARG(nav);
     ASSERT_ARG(nav->pwd.ref);
 
-    if(nav->pwd.ref->stats.st_size >= 0x8000) goto exit; /* TODO: make configurable */
-
+    bool too_large = false;
     So content = SO;
+
+    MTX_DO(&task->nav->pwd.ref->mtx);
+    if(task->nav->pwd.have_read) MTX_BREAK;
+    task->nav->pwd.have_read = true;
+    if(nav->pwd.ref->stats.st_size >= 0x8000) {
+        too_large = true;
+        MTX_BREAK;
+    }
+
     so_file_read(nav->pwd.ref->path, &content);
+    MTX_DONE(&task->nav->pwd.ref->mtx);
+
+    if(too_large) goto exit;
 
     pthread_mutex_lock(&task->sync->mtx);
     bool main_update = nav == task->nav && content.len;
@@ -114,11 +125,16 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
     ASSERT_ARG(cancel);
     ASSERT_ARG(void_task);
     Task_Nav_Directory_Readdir *task = void_task;
+
     Nav_Directory tmp = {0};
 
     size_t len_list = 0;
     size_t index = 0;
     So path = task->nav->pwd.ref->path;
+
+    MTX_DO(&task->nav->pwd.ref->mtx);
+    if(task->nav->pwd.have_read) MTX_BREAK;
+    task->nav->pwd.have_read = true;
     //printff("NOT READ: %.*s",SO_F(path));
 
     size_t files_len = array_len(task->nav->pwd.ref->content.files);
@@ -172,11 +188,11 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
         }
     }
 
-    Nav_Directory *nav = task->sync->panel_gaki.nav_directory;
-
+    MTX_DONE(&task->nav->pwd.ref->mtx);
 
     /* done, apply */
     pthread_mutex_lock(&task->sync->mtx);
+    Nav_Directory *nav = task->sync->panel_gaki.nav_directory;
     bool main_update = nav == task->nav;
     bool main_render = task->nav->parent == nav || task->nav == nav->parent;
     task->nav->list = tmp.list;
@@ -202,7 +218,6 @@ void nav_directory_dispatch_readdir(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_F
     task->sync_m = sync_m;
     task->sync_t = sync_t;
     task->child = child;
-    dir->pwd.have_read = true;
     pw_queue(pw, nav_directory_async_readdir, task);
 }
 
@@ -213,7 +228,6 @@ void nav_directory_dispatch_readreg(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_F
     task->sync = sync;
     task->sync_m = sync_m;
     task->sync_t = sync_t;
-    dir->pwd.have_read = true;
     pw_queue(pw, nav_directory_async_readreg, task);
 }
 
