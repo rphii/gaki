@@ -12,6 +12,7 @@ meson install -C build
 
 - currently _only_ differentiates between _DIRECTORIES_ (or symlinks) and _REGULAR FILES_.
 - preview of _DIRECTORIES_ and _REGULAR FILES_
+- parent view
 - async reads of: _DIRECTORIES_ (magenta bar), utilizing a task queue
 - async reading of: _REGULAR FILES_ (blue bar), utilizing a task queue
 - async input
@@ -33,7 +34,7 @@ meson install -C build
 - `L` next tab
 - `H` previous tab
 
-### SOON™
+## SOON™
 
 - search for file name
 - filter for file name
