@@ -1,3 +1,4 @@
+#include <math.h>
 #include <ctype.h>
 #include <dirent.h>
 #include <sys/wait.h>
@@ -33,34 +34,69 @@ void panel_gaki_select_down(Panel_Gaki *panel, size_t n) {
 void panel_gaki_select_at(Panel_Gaki *panel, size_t n) {
 }
 
+void panel_gaki_layout_get_ratio_widths(Panel_Gaki_Config *config, unsigned int *w_files, unsigned int *w_parent, unsigned int *w_preview) {
+    ssize_t width = config->rc.dim.x;
+    double r_total = config->ratio_files + config->ratio_parent + config->ratio_preview;
+    if(r_total) {
+        *w_parent = round((double)(width * config->ratio_parent) / r_total);
+        *w_files = round((double)(width * config->ratio_files) / r_total);
+        *w_preview = round((double)(width * config->ratio_preview) / r_total);
+    } else {
+        r_total = 7;
+        *w_parent = round((double)(width * 1) / r_total);
+        *w_files = round((double)(width * 3) / r_total);
+        *w_preview = round((double)(width * 3) / r_total);
+    }
+}
+
 void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *config) {
 
-    layout->rc_files = config->rc;
-    layout->rc_split = config->rc;
-    layout->rc_preview = config->rc;
     layout->rc_pwd = config->rc;
+    layout->rc_files = config->rc;
+    layout->rc_parent = config->rc;
+    layout->rc_preview = config->rc;
+    layout->rc_split_parent = config->rc;
+    layout->rc_split_preview = config->rc;
+
+    unsigned int w_files, w_parent, w_preview, h_bar = 1;
+    panel_gaki_layout_get_ratio_widths(config, &w_files, &w_parent, &w_preview);
 
     /* make space for bar */
-    layout->rc_pwd.dim.y = 1;
+    layout->rc_pwd.dim.y = h_bar;
+    layout->rc_files.dim.y -= h_bar;
+    layout->rc_files.anc.y += h_bar;
+    layout->rc_parent.dim.y -= h_bar;
+    layout->rc_parent.anc.y += h_bar;
+    layout->rc_preview.dim.y -= h_bar;
+    layout->rc_preview.anc.y += h_bar;
+    layout->rc_split_preview.anc.y += h_bar;
+    layout->rc_split_preview.dim.y -= h_bar;
+    layout->rc_split_parent.anc.y += h_bar;
+    layout->rc_split_parent.dim.y -= h_bar;
 
-    layout->rc_files.anc.y += 1;
-    layout->rc_split.anc.y += 1;
-    layout->rc_preview.anc.y += 1;
+    /* parent pane */
+    if(w_parent) {
+        layout->rc_split_parent.anc.x = w_parent - 1;
+        layout->rc_split_parent.dim.x = 1;
+        layout->rc_parent.anc.x = 1;
+        layout->rc_parent.dim.x = w_parent - 1;
+    } else {
+        layout->rc_parent.dim.x = 0;
+    }
 
-    layout->rc_files.dim.y -= 1;
-    layout->rc_split.dim.y -= 1;
-    layout->rc_preview.dim.y -= 1;
+    /* files pane */
+    layout->rc_files.anc.x = w_parent;
+    layout->rc_files.dim.x = w_files;
 
-    /* files on left half */
-    layout->rc_files.dim.x /= 2;
-
-    /* split middle, 1 wide */
-    layout->rc_split.anc.x = layout->rc_files.anc.x + layout->rc_files.dim.x;
-    layout->rc_split.dim.x = 1;
-
-    /* preview right half */
-    layout->rc_preview.anc.x = layout->rc_split.anc.x + 1;
-    layout->rc_preview.dim.x = config->rc.dim.x - layout->rc_files.dim.x - 1;
+    /* preview pane */
+    if(w_preview) {
+        layout->rc_split_preview.anc.x = w_parent + w_files;
+        layout->rc_split_preview.dim.x = 1;
+        layout->rc_preview.anc.x = w_parent + w_files + 1;
+        layout->rc_preview.dim.x = w_preview - 1;
+    } else {
+        layout->rc_preview.dim.x = 0;
+    }
 }
 
 
@@ -78,23 +114,15 @@ void panel_gaki_update(Pw *pw, Gaki_Sync_Panel *sync, Tui_Sync_Main *sync_m, Gak
         }
     }
 
+    /* read parent directory */
     if(nav && !nav->parent) {
         So path = so_clone(so_rsplit_ch(nav->pwd.ref->path, PLATFORM_CH_SUBDIR, 0));
         if(!so_len(path)) so_copy(&path, so(PLATFORM_S_SUBDIR));
         if(so_len(path) < so_len(nav->pwd.ref->path)) {
-#if 0
-            printff("\r[%.*s] -> PARENT:[%.*s]",SO_F(nav->pwd.ref->path),SO_F(path));sleep(1);
             File_Info *info = file_info_ensure(sync_t, path);
             NEW(Nav_Directory, nav->parent);
             nav->parent->pwd.ref = info;
-            nav_directory_dispatch_readdir(pw, sync_m, sync_t, sync, nav->parent);
-#else
-            File_Info *info = file_info_ensure(sync_t, path);
-            NEW(Nav_Directory, nav->parent);
-            nav->parent->pwd.ref = info;
-
             nav_directory_dispatch_readdir(pw, sync_m, sync_t, sync, nav->parent, nav);
-#endif
         }
     }
 
@@ -376,12 +404,23 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
         }
     }
 
-    /* draw vertical split */
+    /* draw parent */
+    if(nav && nav->parent) {
+        panel_gaki_render_nav_dir(buffer, &tmp, nav->parent, panel, panel->layout.rc_parent);
+    }
+
+    /* draw vertical splits */
     so_clear(&tmp);
-    for(size_t i = 0; i < panel->layout.rc_split.dim.y; ++i) {
+    for(size_t i = 0; i < panel->layout.rc_split_preview.dim.y; ++i) {
         so_extend(&tmp, so("│\n"));
     }
-    tui_buffer_draw(buffer, panel->layout.rc_split, 0, 0, 0, tmp);
+    tui_buffer_draw(buffer, panel->layout.rc_split_preview, 0, 0, 0, tmp);
+
+    so_clear(&tmp);
+    for(size_t i = 0; i < panel->layout.rc_split_parent.dim.y; ++i) {
+        so_extend(&tmp, so("│\n"));
+    }
+    tui_buffer_draw(buffer, panel->layout.rc_split_parent, 0, 0, 0, tmp);
 
 exit:
     pthread_mutex_unlock(&sync->mtx);
