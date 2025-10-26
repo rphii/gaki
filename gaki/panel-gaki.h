@@ -10,14 +10,19 @@
 typedef struct Gaki Gaki;
 
 typedef struct Panel_Gaki_Layout {
-    Tui_Rect rc_files;
-    Tui_Rect rc_split;
-    Tui_Rect rc_preview;
     Tui_Rect rc_pwd;
+    Tui_Rect rc_files;
+    Tui_Rect rc_parent;
+    Tui_Rect rc_preview;
+    Tui_Rect rc_split_parent;
+    Tui_Rect rc_split_preview;
 } Panel_Gaki_Layout;
 
 typedef struct Panel_Gaki_Config {
     Tui_Rect rc;
+    unsigned int ratio_files;
+    unsigned int ratio_parent;
+    unsigned int ratio_preview;
 } Panel_Gaki_Config;
 
 typedef struct Panel_Gaki {
