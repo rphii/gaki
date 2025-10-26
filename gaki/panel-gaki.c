@@ -167,19 +167,50 @@ bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync
     }
 
     if(input->id == INPUT_MOUSE) {
-#if 0
-        if(tui_rect_encloses_point(sync_panel.panel_gaki.layout.rc_files, input->mouse.pos)) {
-            if(input->mouse.scroll > 0) {
-                ac.select_down = 1;
-            } else if(input->mouse.scroll < 0) {
-                ac.select_up = 1;
+#if 1
+        if(input->mouse.scroll) {
+            if(tui_rect_encloses_point(sync->panel_gaki.layout.rc_files, input->mouse.pos)) {
+                if(input->mouse.scroll > 0) {
+                    ac.select_down = 1;
+                } else if(input->mouse.scroll < 0) {
+                    ac.select_up = 1;
+                }
             }
         }
         if(input->mouse.l) {
-            if(tui_rect_encloses_point(sync_panel.panel_gaki.layout.rc_files, input->mouse.pos)) {
-                Tui_Point pt = tui_rect_project_point(sync_panel.panel_gaki.layout.rc_files, input->mouse.pos);
-                if(sync_panel.panel_gaki.nav_directory) {
-                    sync_panel.panel_gaki.nav_directory->index = pt.y + sync_panel.panel_gaki.nav_directory->offset;
+            Nav_Directory *nav = sync->panel_gaki.nav_directory;
+            if(nav) {
+                if(tui_rect_encloses_point(sync->panel_gaki.layout.rc_files, input->mouse.pos)) {
+                    Tui_Point pt = tui_rect_project_point(sync->panel_gaki.layout.rc_files, input->mouse.pos);
+                    nav->index = pt.y + nav->offset;
+                    any = true;
+                }
+                if(tui_rect_encloses_point(sync->panel_gaki.layout.rc_parent, input->mouse.pos)) {
+                    Tui_Point pt = tui_rect_project_point(sync->panel_gaki.layout.rc_parent, input->mouse.pos);
+                    if(nav->parent) {
+                        Nav_Directory *replace = nav->parent;
+                        if(pt.y + replace->offset < array_len(replace->list)) {
+                            replace->index = pt.y + replace->offset;
+                        }
+                        sync->panel_gaki.nav_directory = replace;
+                        any = true;
+                    }
+                }
+                if(tui_rect_encloses_point(sync->panel_gaki.layout.rc_preview, input->mouse.pos)) {
+                    Tui_Point pt = tui_rect_project_point(sync->panel_gaki.layout.rc_preview, input->mouse.pos);
+                    if(nav->index < array_len(nav->list)) {
+                        Nav_Directory *replace = array_at(nav->list, nav->index);
+                        switch(replace->pwd.ref->stats.st_mode & S_IFMT) {
+                            case S_IFDIR: {
+                                if(pt.y + replace->offset < array_len(replace->list)) {
+                                    replace->index = pt.y;
+                                }
+                                sync->panel_gaki.nav_directory = replace;
+                                any = true;
+                            }
+                            default: break;
+                        }
+                    }
                 }
             }
         }
