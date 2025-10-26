@@ -30,7 +30,7 @@ meson install -C build
 - `j` file down
 - `k` file up
 - `l` enter folder or file via. `$EDITOR`
-- `K` create tab
+- `t` create tab
 - `L` next tab
 - `H` previous tab
 
