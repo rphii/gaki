@@ -45,4 +45,5 @@ meson install -C build
 - multiple panels basically already in the code via. tabs, but I do want multi-panels as well
 - other directory sorting methods
 - maybe: integrate fzf?
+- log/errors instead of hard quitting, when e.g. no EDITOR or child failed
 
