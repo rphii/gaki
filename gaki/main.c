@@ -83,10 +83,6 @@ void handle_resize(Gaki *gaki) {
     }
 
     gaki->sync_panel.panel_gaki.config.rc = (Tui_Rect){ .dim = dimension };
-    gaki->sync_panel.panel_gaki.config.rc.dim.y /= 2;
-    gaki->sync_panel2.panel_gaki.config.rc = (Tui_Rect){ .dim = dimension };
-    gaki->sync_panel2.panel_gaki.config.rc.dim.y /= 2;
-    gaki->sync_panel2.panel_gaki.config.rc.anc.y = gaki->sync_panel.panel_gaki.config.rc.dim.y;
     tui_buffer_resize(&gaki->buffer, dimension);
     tui_sync_main_render(&gaki->sync_main);
 }
@@ -205,12 +201,10 @@ int main(int argc, char **argv) {
     if(argc >= 2) {
         /* TODO iterate over i and make tabs/splits */
         nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, so_l(argv[1]));
-        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel2, so_l(argv[1]));
     } else {
         So pwd = SO;
         so_env_get(&pwd, so("PWD"));
         nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, pwd);
-        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel2, pwd);
         so_free(&pwd);
     }
 
@@ -233,13 +227,10 @@ int main(int argc, char **argv) {
             bool flush = false;
             while(!gaki.quit && array_len(gaki.inputs)) {
                 Tui_Input input = array_pop(gaki.inputs);
-                if(flush) continue;
                 render |= panel_gaki_input(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, &gaki.sync_input, &gaki.sync_draw, &input, &flush, &gaki.quit);
                 if(flush) continue;
-                render |= panel_gaki_input(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel2, &gaki.sync_input, &gaki.sync_draw, &input, &flush, &gaki.quit);
             }
             panel_gaki_update(&gaki.pw_task, &gaki.sync_panel, &gaki.sync_main, &gaki.sync_t_file_info);
-            panel_gaki_update(&gaki.pw_task, &gaki.sync_panel2, &gaki.sync_main, &gaki.sync_t_file_info);
 
             pthread_mutex_lock(&gaki.sync_main.mtx);
             ++gaki.sync_main.update_done;
@@ -268,7 +259,6 @@ int main(int argc, char **argv) {
         if(render_do && !draw_busy) {
             tui_buffer_clear(&gaki.buffer);
             panel_gaki_render(&gaki.buffer, &gaki.sync_panel);
-            panel_gaki_render(&gaki.buffer, &gaki.sync_panel2);
 
 #if 0
             So tmp = SO;
