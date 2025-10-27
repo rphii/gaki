@@ -291,6 +291,20 @@ bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync
                 /* resume input */
                 tui_sync_input_wake(sync_i);
 
+                /* unload file */
+                pthread_mutex_lock(&nav->pwd.ref->mtx);
+                so_free(&nav->pwd.ref->content.text);
+                nav->pwd.ref->loaded = false;
+                nav->pwd.ref->loaded_done = false;
+                pthread_mutex_unlock(&nav->pwd.ref->mtx);
+
+                pthread_mutex_lock(&nav->pwd.mtx);
+                nav->pwd.have_read = false;
+                pthread_mutex_unlock(&nav->pwd.mtx);
+
+                /* issue new read */
+                nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav);
+
                 /* issue a redraw */
                 tui_sync_redraw(sync_d);
 #endif
