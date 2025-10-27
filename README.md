@@ -16,12 +16,13 @@ meson install -C build
 - async reads of: _DIRECTORIES_ (magenta bar), utilizing a task queue
 - async reading of: _REGULAR FILES_ (blue bar), utilizing a task queue
 - async input
-- async output
+- async draw
 - 10k+ fps _(`-O3 -march=native -flto=auto -DNDEBUG` and spamming random inputs in code)_
 - remembers the selected index when browsing the directory tree
-- mouse support
-- sorted directory preview
-- resizable window
+- mouse support _(parent, current and preview pane + scrolling)_
+- sorted directory preview _(via filename)_
+- auto-resizable window
+- edit regular files in-program
 
 ## ⌨️ Hotkeys
 
@@ -36,6 +37,7 @@ meson install -C build
 
 ## SOON™
 
+- update directory/files on external change
 - search for file name
 - filter for file name
 - help for hotkeys

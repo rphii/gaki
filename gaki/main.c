@@ -195,7 +195,7 @@ int main(int argc, char **argv) {
     pw_queue(&gaki.pw_draw, pw_queue_render, &gaki);
     pw_dispatch(&gaki.pw_draw);
 
-    pw_init(&gaki.pw_task, 32);
+    pw_init(&gaki.pw_task, 4);
     pw_dispatch(&gaki.pw_task);
 
     if(argc >= 2) {
