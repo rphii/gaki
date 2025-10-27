@@ -138,9 +138,8 @@ bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync
 
     Nav_Directory *nav = sync->panel_gaki.nav_directory;
 
-    //usleep(1e4);printff("\rSTATE: %b  %b  %b  %b",input->key.down,input->key.press,input->key.release,input->key.repeat);usleep(1e4);
-    if(input->id == INPUT_TEXT && input->text.len == 1) {
-        switch(input->text.str[0]) {
+    if(input->id == INPUT_TEXT) {
+        switch(input->text.val) {
             case 'q': ac.quit = true; break;
             case 'j': ac.select_down = 1; break;
             case 'k': ac.select_up = 1; break;
