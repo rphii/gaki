@@ -286,6 +286,7 @@ bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync
                 }
 
                 system("tput smcup");
+                tui_write_cstr(TUI_ESC_CODE_MOUSE_ON);
 
                 /* resume input */
                 tui_sync_input_wake(sync_i);
