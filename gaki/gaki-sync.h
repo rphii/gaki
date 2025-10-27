@@ -14,17 +14,6 @@ typedef struct Gaki_Sync_T_File_Info {
     T_File_Info t_file_info;
 } Gaki_Sync_T_File_Info;
 
-#define MTX_DO(mtx) \
-        pthread_mutex_lock(mtx); \
-        do { \
-
-#define MTX_BREAK \
-        break
-
-#define MTX_DONE(mtx) \
-        } while(0); \
-        pthread_mutex_unlock(mtx)
-
 #define GAKI_SYNC_H
 #endif
 
