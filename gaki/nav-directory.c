@@ -89,25 +89,28 @@ void *nav_directory_async_readreg(Pw *pw, bool *cancel, void *void_task) {
     ASSERT_ARG(nav);
     ASSERT_ARG(nav->pwd.ref);
 
-    bool too_large = false;
-    So content = SO;
+    pthread_mutex_lock(&task->nav->pwd.ref->mtx);
+    bool loaded = task->nav->pwd.ref->loaded;
+    task->nav->pwd.ref->loaded = true;
 
-    MTX_DO(&task->nav->pwd.ref->mtx);
-    if(task->nav->pwd.have_read) MTX_BREAK;
-    task->nav->pwd.have_read = true;
-    if(nav->pwd.ref->stats.st_size >= 0x8000) {
-        too_large = true;
-        MTX_BREAK;
+    So content = SO;
+    if(!loaded) {
+
+        task->nav->pwd.have_read = true;
+        if(nav->pwd.ref->stats.st_size >= 0x8000) {
+            goto exit;
+        }
+
+        so_file_read(nav->pwd.ref->path, &content);
+
+        nav->pwd.ref->content.text = content;
     }
 
-    so_file_read(nav->pwd.ref->path, &content);
-    MTX_DONE(&task->nav->pwd.ref->mtx);
-
-    if(too_large) goto exit;
+    /* done */
+    pthread_mutex_unlock(&task->nav->pwd.ref->mtx);
 
     pthread_mutex_lock(&task->sync->mtx);
     bool main_update = nav == task->nav && content.len;
-    nav->pwd.ref->content.text = content;
     pthread_mutex_unlock(&task->sync->mtx);
 
     //tui_sync_main_render(task->sync_m);
@@ -132,14 +135,14 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
     size_t index = 0;
     So path = task->nav->pwd.ref->path;
 
-    MTX_DO(&task->nav->pwd.ref->mtx);
-    if(task->nav->pwd.have_read) MTX_BREAK;
-    task->nav->pwd.have_read = true;
-    //printff("NOT READ: %.*s",SO_F(path));
+    pthread_mutex_lock(&task->nav->pwd.ref->mtx);
+    bool loaded = task->nav->pwd.ref->loaded;
+    task->nav->pwd.ref->loaded = true;
 
-    size_t files_len = array_len(task->nav->pwd.ref->content.files);
-
-    if(!files_len) {
+    size_t files_len = 0;
+    if(loaded) {
+        files_len = array_len(task->nav->pwd.ref->content.files);
+    } else {
         struct dirent *dir;
         char *cdirname = so_dup(path);
         DIR *d = opendir(cdirname);
@@ -176,6 +179,10 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
         ++len_list;
     }
 
+    /* done */
+    task->nav->list = tmp.list;
+    pthread_mutex_unlock(&task->nav->pwd.ref->mtx);
+
     nav_directories_sort(tmp.list);
 
     if(task->child) {
@@ -188,7 +195,7 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
         }
     }
 
-    MTX_DONE(&task->nav->pwd.ref->mtx);
+    //MTX_DONE(&task->nav->pwd.ref->mtx);
 
     /* done, apply */
     pthread_mutex_lock(&task->sync->mtx);
@@ -212,6 +219,13 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
 
 void nav_directory_dispatch_readdir(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, Nav_Directory *dir, Nav_Directory *child) {
     Task_Nav_Directory_Readdir *task;
+
+    pthread_mutex_lock(&dir->pwd.mtx);
+    bool have_read = dir->pwd.have_read;
+    dir->pwd.have_read = true;
+    pthread_mutex_unlock(&dir->pwd.mtx);
+    if(have_read) return;
+
     NEW(Task_Nav_Directory_Readdir, task);
     task->nav = dir;
     task->sync = sync;
@@ -223,6 +237,13 @@ void nav_directory_dispatch_readdir(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_F
 
 void nav_directory_dispatch_readreg(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, Nav_Directory *dir) {
     Task_Nav_Directory_Readreg *task;
+
+    pthread_mutex_lock(&dir->pwd.mtx);
+    bool have_read = dir->pwd.have_read;
+    dir->pwd.have_read = true;
+    pthread_mutex_unlock(&dir->pwd.mtx);
+    if(have_read) return;
+
     NEW(Task_Nav_Directory_Readreg, task);
     task->nav = dir;
     task->sync = sync;

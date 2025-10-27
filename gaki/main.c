@@ -96,12 +96,12 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
     for(;;) {
 
 #if 0
-        Tui_Input sim = { .id = INPUT_TEXT, .key = INPUT_STATE_PRESS };
+        Tui_Input sim = { .id = INPUT_TEXT };
         int rnd = fast_rand() % 4;
-        if(rnd == 0) sim.text = so("h");
+        //if(rnd == 0) sim.text = so("h");
         if(rnd == 1) sim.text = so("j");
-        if(rnd == 2) sim.text = so("k");
-        if(rnd == 3) sim.text = so("l");
+        //if(rnd == 2) sim.text = so("k");
+        //if(rnd == 3) sim.text = so("l");
         pthread_mutex_lock(&gaki->sync_input.mtx);
         array_push(gaki->sync_input.inputs, sim);
         pthread_mutex_unlock(&gaki->sync_input.mtx);
@@ -199,7 +199,7 @@ int main(int argc, char **argv) {
     pw_queue(&gaki.pw_draw, pw_queue_render, &gaki);
     pw_dispatch(&gaki.pw_draw);
 
-    pw_init(&gaki.pw_task, 4);
+    pw_init(&gaki.pw_task, 32);
     pw_dispatch(&gaki.pw_task);
 
     if(argc >= 2) {
@@ -235,6 +235,7 @@ int main(int argc, char **argv) {
                 Tui_Input input = array_pop(gaki.inputs);
                 if(flush) continue;
                 render |= panel_gaki_input(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, &gaki.sync_input, &gaki.sync_draw, &input, &flush, &gaki.quit);
+                if(flush) continue;
                 render |= panel_gaki_input(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel2, &gaki.sync_input, &gaki.sync_draw, &input, &flush, &gaki.quit);
             }
             panel_gaki_update(&gaki.pw_task, &gaki.sync_panel, &gaki.sync_main, &gaki.sync_t_file_info);
@@ -315,6 +316,12 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_REALTIME, &gaki.tE);
 
     tui_sync_input_quit(&gaki.sync_input);
+
+    t_file_info_free(&gaki.sync_t_file_info.t_file_info);
+    array_free(gaki.inputs);
+    array_free(gaki.sync_input.inputs);
+    tui_screen_free(&gaki.screen);
+    tui_buffer_free(&gaki.buffer);
 
     gaki_free(&gaki);
 
