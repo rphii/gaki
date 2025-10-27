@@ -31,7 +31,6 @@ typedef struct Gaki {
     Tui_Sync_Draw sync_draw;
     Tui_Sync_Input sync_input;
     Gaki_Sync_Panel sync_panel;
-    Gaki_Sync_Panel sync_panel2;
 
     Gaki_Sync_T_File_Info sync_t_file_info;
 
