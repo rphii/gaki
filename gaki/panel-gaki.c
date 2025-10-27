@@ -78,7 +78,7 @@ void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *
     if(w_parent) {
         layout->rc_split_parent.anc.x = w_parent - 1;
         layout->rc_split_parent.dim.x = 1;
-        layout->rc_parent.anc.x = 1;
+        layout->rc_parent.anc.x = 0;
         layout->rc_parent.dim.x = w_parent - 1;
     } else {
         layout->rc_parent.dim.x = 0;
@@ -93,7 +93,7 @@ void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *
         layout->rc_split_preview.anc.x = w_parent + w_files;
         layout->rc_split_preview.dim.x = 1;
         layout->rc_preview.anc.x = w_parent + w_files + 1;
-        layout->rc_preview.dim.x = w_preview - 1;
+        layout->rc_preview.dim.x = config->rc.dim.x - layout->rc_preview.anc.x - 1;
     } else {
         layout->rc_preview.dim.x = 0;
     }
