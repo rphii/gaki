@@ -95,15 +95,10 @@ void *nav_directory_async_readreg(Pw *pw, bool *cancel, void *void_task) {
 
     So content = SO;
     if(!loaded) {
-
-        task->nav->pwd.have_read = true;
-        if(nav->pwd.ref->stats.st_size >= 0x8000) {
-            goto exit;
+        if(nav->pwd.ref->stats.st_size < 0x8000) {
+            so_file_read(nav->pwd.ref->path, &content);
+            nav->pwd.ref->content.text = content;
         }
-
-        so_file_read(nav->pwd.ref->path, &content);
-
-        nav->pwd.ref->content.text = content;
     }
 
     /* done */
@@ -153,10 +148,9 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
                 if(dir->d_name[0] == '.') continue;
                 so_clear(&search);
                 so_path_join(&search, so_ensure_dir(path), so_l(dir->d_name));
-                //usleep(1e5);printff("\r>> %.*s",SO_F(search));
+                /* TODO potential deadlock? ensure locks sync_t, but already locked ref->mtx */
                 File_Info *info = file_info_ensure(task->sync_t, search);
                 array_push(task->nav->pwd.ref->content.files, info);
-                info->loaded = true;
             }
             so_free(&search);
             closedir(d);

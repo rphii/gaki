@@ -97,11 +97,11 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
 
 #if 0
         Tui_Input sim = { .id = INPUT_TEXT };
-        int rnd = fast_rand() % 4;
-        if(rnd == 0) sim.text.val = 'h';
+        int rnd = fast_rand() % 5;
+        //if(rnd == 0) sim.text.val = 'h';
         if(rnd == 1) sim.text.val = 'j';
-        if(rnd == 2) sim.text.val = 'k';
-        if(rnd == 3) sim.text.val = 'l';
+        //if(rnd == 2) sim.text.val = 'k';
+        //if(rnd == 3) sim.text.val = 'l';
         pthread_mutex_lock(&gaki->sync_input.mtx);
         array_push(gaki->sync_input.inputs, sim);
         pthread_mutex_unlock(&gaki->sync_input.mtx);
