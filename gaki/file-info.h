@@ -19,7 +19,9 @@ typedef struct File_Info {
         File_Infos *files;
     } content;
     pthread_mutex_t mtx;
+    pthread_cond_t cond;
     bool loaded;
+    bool loaded_done;
 } File_Info, *File_Infos;
 
 int file_info_cmp(File_Info *a, File_Info *b);

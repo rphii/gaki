@@ -133,6 +133,10 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
     pthread_mutex_lock(&task->nav->pwd.ref->mtx);
     bool loaded = task->nav->pwd.ref->loaded;
     task->nav->pwd.ref->loaded = true;
+    while(loaded && !task->nav->pwd.ref->loaded_done) {
+        pthread_cond_wait(&task->nav->pwd.ref->cond, &task->nav->pwd.ref->mtx);
+    }
+    pthread_mutex_unlock(&task->nav->pwd.ref->mtx);
 
     size_t files_len = 0;
     if(loaded) {
@@ -148,7 +152,6 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
                 if(dir->d_name[0] == '.') continue;
                 so_clear(&search);
                 so_path_join(&search, so_ensure_dir(path), so_l(dir->d_name));
-                /* TODO potential deadlock? ensure locks sync_t, but already locked ref->mtx */
                 File_Info *info = file_info_ensure(task->sync_t, search);
                 array_push(task->nav->pwd.ref->content.files, info);
             }
@@ -174,8 +177,12 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
     }
 
     /* done */
-    task->nav->list = tmp.list;
-    pthread_mutex_unlock(&task->nav->pwd.ref->mtx);
+    if(!loaded) {
+        pthread_mutex_lock(&task->nav->pwd.ref->mtx);
+        task->nav->pwd.ref->loaded_done = true;
+        pthread_cond_signal(&task->nav->pwd.ref->cond);
+        pthread_mutex_unlock(&task->nav->pwd.ref->mtx);
+    }
 
     nav_directories_sort(tmp.list);
 
