@@ -1,6 +1,7 @@
 #ifndef FILE_INFOS_H
 
 #include <rlso.h>
+#include <rltui.h>
 #include <sys/stat.h>
 
 typedef struct File_Info File_Info;
@@ -11,13 +12,46 @@ typedef struct Gaki_Sync_T_File_Info Gaki_Sync_T_File_Info;
 //VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, SORT);
 LUT_INCLUDE(T_File_Info, t_file_info, So, BY_VAL, File_Info, BY_REF);
 
-typedef struct File_Info {
-    So path;
-    struct stat stats;
+typedef enum {
+    FILE_GRAPHIC_NONE,
+    FILE_GRAPHIC_UNICODE,
+    FILE_GRAPHIC_KITTY,
+} File_Graphic_List;
+
+typedef struct Gaki_Image {
+    unsigned int w;
+    unsigned int h;
+    unsigned int ch;
+    unsigned char *data;
+} Gaki_Image;
+
+typedef struct File_Graphic {
+    File_Graphic_List id;
+    Gaki_Image thumb;
+    So cvt_str;
+    Tui_Point cvt_rct;
+} File_Graphic;
+
+typedef enum File_Content_List {
+    FILE_CONTENT_NONE,
+    FILE_CONTENT_TEXT,
+    FILE_CONTENT_DIRECTORY,
+    FILE_CONTENT_GRAPH,
+} File_Content_List;
+
+typedef struct File_Content {
     union {
         So text;
         File_Infos *files;
-    } content;
+        File_Graphic graphic;
+    };
+    File_Content_List id;
+} File_Content;
+
+typedef struct File_Info {
+    So path;
+    struct stat stats;
+    File_Content content;
     pthread_mutex_t mtx;
     pthread_cond_t cond;
     bool loaded;
