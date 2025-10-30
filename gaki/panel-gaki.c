@@ -488,6 +488,7 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
             case S_IFREG: {
                 so_fmt(&tmp, "[FILE:");
                 so_filesig_fmt(&tmp, current->pwd.ref->signature_id);
+                if(current->pwd.ref->signature_unsure) so_push(&tmp, '?');
                 so_fmt(&tmp, "]");
             } break;
             default: { so_fmt(&tmp, "[?]"); } break;
