@@ -48,13 +48,15 @@ char *file_info_relcstr(File_Info *info) {
 
 File_Info *file_info_ensure(Gaki_Sync_T_File_Info *sync, So path) {
     pthread_rwlock_wrlock(&sync->rwl);
-    File_Info *info = t_file_info_get(&sync->t_file_info, so_ensure_dir(path));
+    path = so_ensure_dir(path);
+    File_Info *info = t_file_info_get(&sync->t_file_info, path);
     if(!info) {
         File_Info info_new = {0};
-        info_new.path = so_clone(so_ensure_dir(path));
+        info_new.path = so_clone(path);
         char *cpath = so_dup(info_new.path);
         stat(cpath, &info_new.stats);
         free(cpath);
+        so_filesig(path, &info_new.signature_unsure, &info_new.signature_id);
         T_File_InfoKV *kv = t_file_info_once(&sync->t_file_info, info_new.path, &info_new);
         if(!kv) {
             usleep(1e5);

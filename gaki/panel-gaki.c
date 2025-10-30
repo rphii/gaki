@@ -1,4 +1,5 @@
 #include <math.h>
+#include <fcntl.h>
 #include <ctype.h>
 #include <dirent.h>
 #include <sys/wait.h>
@@ -249,6 +250,58 @@ bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync
             } break;
             case S_IFREG: {
 
+                switch(nav->pwd.ref->signature_id) {
+                    case SO_FILESIG_MKV: {
+
+#if 1
+                *flush = true;
+                So prg = so("xdg-open");
+
+                // /* pause input */
+                // tui_sync_input_idle(sync_i);
+
+                pid_t pid = fork();
+                if(pid < 0) {
+                    // TODO make some kind of notice
+                    printff("\rFORK FAILED");
+                    exit(1);
+                } else if(!pid) {
+
+                    int fd = open("/dev/null", O_WRONLY | O_CREAT, 0666);
+                    dup2(fd, 1);
+                    dup2(fd, 2);
+
+                    char *cprg = so_dup(prg);
+                    char *cpath = so_dup(nav->pwd.ref->path);
+                    char *cargs[] = { cprg, cpath, 0 };
+                    execvp(cprg, cargs);
+                    close(fd);
+                    _exit(EXIT_FAILURE);
+                }
+
+                // int status;
+                // waitpid(pid, &status, 0);
+
+                // if(status) {
+                //     // TODO make some kind of notice
+                //     printff("\rCHILD FAILED");
+                //     exit(1);
+                // }
+
+                // /* resume input */
+                // tui_sync_input_wake(sync_i);
+
+                // /* issue new read */
+                // nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav);
+
+                // /* issue a redraw */
+                // tui_sync_redraw(sync_d);
+#endif
+
+                    } break;
+
+                    default: {
+
 #if 1
                 *flush = true;
                 So ed = SO;
@@ -312,6 +365,9 @@ bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync
                 /* issue a redraw */
                 tui_sync_redraw(sync_d);
 #endif
+
+                    } break;
+                }
 
             } break;
             default: break;
@@ -429,7 +485,11 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
         Tui_Rect rc_mode = panel->layout.rc_pwd;
         switch(current->pwd.ref->stats.st_mode & S_IFMT) {
             case S_IFDIR: { so_fmt(&tmp, "[DIR]"); } break;
-            case S_IFREG: { so_fmt(&tmp, "[FILE]"); } break;
+            case S_IFREG: {
+                so_fmt(&tmp, "[FILE:");
+                so_filesig_fmt(&tmp, current->pwd.ref->signature_id);
+                so_fmt(&tmp, "]");
+            } break;
             default: { so_fmt(&tmp, "[?]"); } break;
         }
         rc_mode.dim.x = tmp.len;
