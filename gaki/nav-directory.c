@@ -243,7 +243,7 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
     pthread_mutex_unlock(&task->sync->mtx);
 
     if(main_update) {
-        tui_sync_main_update(task->sync_m);
+        tui_sync_main_both(task->sync_m);
     }
 
     free(task);
