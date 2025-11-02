@@ -73,7 +73,7 @@ void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *
 }
 
 
-void panel_gaki_update(Pw *pw, Gaki_Sync_Panel *sync, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t) {
+bool panel_gaki_update(Pw *pw, Gaki_Sync_Panel *sync, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t) {
 
     pthread_mutex_lock(&sync->mtx);
 
