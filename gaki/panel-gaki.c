@@ -8,27 +8,35 @@
 #include "gaki.h"
 
 void panel_gaki_select_up(Panel_Gaki *panel, size_t n) {
-    if(!panel->nav_directory) return;
-    if(!panel->nav_directory->index) {
-        panel->nav_directory->index = array_len(panel->nav_directory->list) - 1;
-        panel->nav_directory->offset = panel->nav_directory->index + 1 > panel->layout.rc_files.dim.y ? panel->nav_directory->index + 1 - panel->layout.rc_files.dim.y : 0;
+    ASSERT_ARG(panel);
+    Nav_Directory *nav = panel->nav_directory;
+    if(!nav) return;
+    if(!nav->index) {
+        nav->index = array_len(nav->list) - 1;
+        nav->offset = nav->index + 1 > panel->layout.rc_files.dim.y ? nav->index + 1 - panel->layout.rc_files.dim.y : 0;
     } else {
-        --panel->nav_directory->index;
-        if(panel->nav_directory->offset) {
-            --panel->nav_directory->offset;
+        --nav->index;
+        if(nav->offset) {
+            if(nav->offset + panel->layout.rc_files.dim.y / 2 > nav->index) {
+                --nav->offset;
+            }
         }
     }
 }
 
 void panel_gaki_select_down(Panel_Gaki *panel, size_t n) {
-    if(!panel->nav_directory) return;
-    ++panel->nav_directory->index;
-    if(panel->nav_directory->index >= array_len(panel->nav_directory->list)) {
-        panel->nav_directory->index = 0;
-        panel->nav_directory->offset = 0;
+    ASSERT_ARG(panel);
+    Nav_Directory *nav = panel->nav_directory;
+    if(!nav) return;
+    ++nav->index;
+    if(nav->index >= array_len(nav->list)) {
+        nav->index = 0;
+        nav->offset = 0;
     }
-    if(panel->nav_directory->index >= panel->nav_directory->offset + panel->layout.rc_files.dim.y) {
-        ++panel->nav_directory->offset;
+    if(nav->index >= nav->offset + panel->layout.rc_files.dim.y / 2) {
+        if(nav->offset + panel->layout.rc_files.dim.y < array_len(nav->list)) {
+            ++nav->offset;
+        }
     }
 }
 
