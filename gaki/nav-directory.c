@@ -73,7 +73,7 @@ void nav_directory_select_down(Nav_Directory *nav, Tui_Point dim, size_t n) {
 
 void nav_directory_offset_center(Nav_Directory *nav, Tui_Point dim) {
     if(!nav) return;
-    size_t len = array_len(nav->list);
+    size_t len = nav_directory_visible_count(nav);
     if(len <= dim.y) {
         nav->offset = 0;
     } else {
@@ -345,5 +345,27 @@ void nav_directory_dispatch_register(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_
     task->current_register = ++task->sync->count_register;
 
     pw_queue(pw, nav_directory_async_register, task);
+}
+
+bool nav_directory_visible_check(Nav_Directory *nav, So filter) {
+    bool visible = false;
+    if(!nav) return visible;
+    File_Info *info = nav->pwd.ref;
+    if(!info) return visible;
+    if(!so_len(filter)) visible = true;
+    So check = so_get_nodir(info->path);
+    if(so_find_sub(check, filter, true) < so_len(check)) visible = true;
+    return visible;
+}
+
+size_t nav_directory_visible_count(Nav_Directory *nav) {
+    size_t result = 0;
+    if(!nav) return result;
+    size_t len = array_len(nav->list);
+    for(size_t i = 0; i < len; ++i) {
+        Nav_Directory *nav_sub = array_at(nav->list, i);
+        result += nav_directory_visible_check(nav_sub, nav->filter.so);
+    }
+    return result;
 }
 

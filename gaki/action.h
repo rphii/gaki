@@ -13,6 +13,7 @@ typedef struct Action {
     bool tab_next;
     bool tab_new;
     bool quit;
+    bool filter;
 } Action;
 
 typedef enum {

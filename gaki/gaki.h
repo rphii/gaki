@@ -4,6 +4,7 @@
 #include <rlpw.h>
 
 #include "panel-gaki.h"
+#include "panel-input.h"
 #include "action.h"
 #include "gaki-sync.h"
 
@@ -26,6 +27,8 @@ typedef struct Gaki {
 
     Tui_Screen screen;
     Tui_Buffer buffer;
+
+    Panel_Input panel_input;
 
     Tui_Sync_Main sync_main;
     Tui_Sync_Draw sync_draw;
