@@ -67,7 +67,6 @@ void signal_winch(int x) {
 
 void handle_resize(Gaki *gaki) {
     if(!gaki->resized) return;
-    gaki->resized = false;
     
     struct winsize w;
     ioctl(0, TIOCGWINSZ, &w);
@@ -79,6 +78,7 @@ void handle_resize(Gaki *gaki) {
 
     Tui_Point dimension_prev = gaki->buffer.dimension;
     if(!tui_point_cmp(dimension_prev, dimension)) {
+        gaki->resized = false;
         return;
     }
 
@@ -227,10 +227,15 @@ int main(int argc, char **argv) {
             bool flush = false;
             while(!gaki.quit && array_len(gaki.inputs)) {
                 Tui_Input input = array_pop(gaki.inputs);
-                render |= panel_gaki_input(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, &gaki.sync_input, &gaki.sync_draw, &input, &flush, &gaki.quit);
+                if(gaki.panel_input.visible) {
+                    render |= panel_input_input(&gaki.panel_input, &gaki.sync_main, &input, &flush);
+                } else {
+                    render |= panel_gaki_input(&gaki.sync_panel, &gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_input, &gaki.sync_draw, &input, &gaki.panel_input, &flush, &gaki.quit);
+                }
                 if(flush) continue;
             }
-            panel_gaki_update(&gaki.pw_task, &gaki.sync_panel, &gaki.sync_main, &gaki.sync_t_file_info);
+            panel_gaki_update(&gaki.sync_panel, &gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.panel_input);
+            panel_input_update(&gaki.panel_input);
 
             pthread_mutex_lock(&gaki.sync_main.mtx);
             ++gaki.sync_main.update_done;
@@ -259,6 +264,7 @@ int main(int argc, char **argv) {
         if(render_do && !draw_busy) {
             tui_buffer_clear(&gaki.buffer);
             panel_gaki_render(&gaki.buffer, &gaki.sync_panel);
+            panel_input_render(&gaki.panel_input, &gaki.buffer);
 
 #if 0
             So tmp = SO;
