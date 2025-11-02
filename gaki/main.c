@@ -230,7 +230,7 @@ int main(int argc, char **argv) {
                 render |= panel_gaki_input(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, &gaki.sync_input, &gaki.sync_draw, &input, &flush, &gaki.quit);
                 if(flush) continue;
             }
-            panel_gaki_update(&gaki.pw_task, &gaki.sync_panel, &gaki.sync_main, &gaki.sync_t_file_info);
+            render |= panel_gaki_update(&gaki.pw_task, &gaki.sync_panel, &gaki.sync_main, &gaki.sync_t_file_info);
 
             pthread_mutex_lock(&gaki.sync_main.mtx);
             ++gaki.sync_main.update_done;
