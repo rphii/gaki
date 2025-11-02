@@ -237,17 +237,13 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
     /* done, apply */
     pthread_mutex_lock(&task->sync->mtx);
     Nav_Directory *nav = task->sync->panel_gaki.nav_directory;
-    bool main_update = nav == task->nav || task->nav == nav->parent; // have to update, maybe center offset
-    bool main_render = task->nav->parent == nav;
+    bool main_update = nav == task->nav || task->nav->parent == nav || task->nav == nav->parent; // have to update, maybe center offset
     task->nav->list = tmp.list;
     task->nav->index = index;
     pthread_mutex_unlock(&task->sync->mtx);
 
     if(main_update) {
         tui_sync_main_update(task->sync_m);
-    }
-    if(main_render) {
-        tui_sync_main_render(task->sync_m);
     }
 
     free(task);
