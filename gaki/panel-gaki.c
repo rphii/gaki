@@ -66,7 +66,7 @@ void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *
         layout->rc_split_preview.anc.x = w_parent + w_files;
         layout->rc_split_preview.dim.x = 1;
         layout->rc_preview.anc.x = w_parent + w_files + 1;
-        layout->rc_preview.dim.x = config->rc.dim.x - layout->rc_preview.anc.x - 1;
+        layout->rc_preview.dim.x = config->rc.dim.x - layout->rc_preview.anc.x;
     } else {
         layout->rc_preview.dim.x = 0;
     }
