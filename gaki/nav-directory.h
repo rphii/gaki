@@ -17,6 +17,10 @@ typedef struct Nav_Directory {
     size_t offset;
 } Nav_Directory, *Nav_Directories;
 
+void nav_directory_select_up(Nav_Directory *nav, Tui_Point dim, size_t n);
+void nav_directory_select_down(Nav_Directory *nav, Tui_Point dim, size_t n);
+void nav_directory_offset_center(Nav_Directory *nav, Tui_Point dim);
+
 void nav_directory_dispatch_readdir(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, Nav_Directory *dir, Nav_Directory *child);
 void nav_directory_dispatch_readreg(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, Nav_Directory *dir);
 void nav_directory_dispatch_readany(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, Nav_Directory *dir);

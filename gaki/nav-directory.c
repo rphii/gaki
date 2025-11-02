@@ -54,6 +54,42 @@ void x() {
 
 #include <dirent.h>
 
+void nav_directory_select_up(Nav_Directory *nav, Tui_Point dim, size_t n) {
+    if(!nav) return;
+    if(!nav->index) {
+        nav->index = array_len(nav->list) - 1;
+    } else {
+        --nav->index;
+    }
+}
+
+void nav_directory_select_down(Nav_Directory *nav, Tui_Point dim, size_t n) {
+    if(!nav) return;
+    ++nav->index;
+    if(nav->index >= array_len(nav->list)) {
+        nav->index = 0;
+    }
+}
+
+void nav_directory_offset_center(Nav_Directory *nav, Tui_Point dim) {
+    if(!nav) return;
+    size_t len = array_len(nav->list);
+    if(len <= dim.y) {
+        nav->offset = 0;
+    } else {
+        ssize_t y2 = dim.y / 2;
+        if(nav->index >= y2) {
+            if(nav->index < len - y2) {
+                nav->offset = nav->index - y2;
+            } else {
+                nav->offset = len - dim.y;
+            }
+        } else {
+            nav->offset = 0;
+        }
+    }
+}
+
 
 void nav_directories_sort(Nav_Directories *vec) {
     /* shell sort, https://rosettacode.org/wiki/Sorting_algorithms/Shell_sort */

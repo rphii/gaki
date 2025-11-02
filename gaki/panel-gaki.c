@@ -7,42 +7,6 @@
 #include "panel-gaki.h"
 #include "gaki.h"
 
-void panel_gaki_select_up(Panel_Gaki *panel, size_t n) {
-    ASSERT_ARG(panel);
-    Nav_Directory *nav = panel->nav_directory;
-    if(!nav) return;
-    if(!nav->index) {
-        nav->index = array_len(nav->list) - 1;
-        nav->offset = nav->index + 1 > panel->layout.rc_files.dim.y ? nav->index + 1 - panel->layout.rc_files.dim.y : 0;
-    } else {
-        --nav->index;
-        if(nav->offset) {
-            if(nav->offset + panel->layout.rc_files.dim.y / 2 > nav->index) {
-                --nav->offset;
-            }
-        }
-    }
-}
-
-void panel_gaki_select_down(Panel_Gaki *panel, size_t n) {
-    ASSERT_ARG(panel);
-    Nav_Directory *nav = panel->nav_directory;
-    if(!nav) return;
-    ++nav->index;
-    if(nav->index >= array_len(nav->list)) {
-        nav->index = 0;
-        nav->offset = 0;
-    }
-    if(nav->index >= nav->offset + panel->layout.rc_files.dim.y / 2) {
-        if(nav->offset + panel->layout.rc_files.dim.y < array_len(nav->list)) {
-            ++nav->offset;
-        }
-    }
-}
-
-void panel_gaki_select_at(Panel_Gaki *panel, size_t n) {
-}
-
 void panel_gaki_layout_get_ratio_widths(Panel_Gaki_Config *config, unsigned int *w_files, unsigned int *w_parent, unsigned int *w_preview) {
     ssize_t width = config->rc.dim.x;
     double r_total = config->ratio_files + config->ratio_parent + config->ratio_preview;
@@ -133,6 +97,15 @@ void panel_gaki_update(Pw *pw, Gaki_Sync_Panel *sync, Tui_Sync_Main *sync_m, Gak
             nav->parent->pwd.ref = info;
             nav_directory_dispatch_readdir(pw, sync_m, sync_t, sync, nav->parent, nav);
         }
+    }
+    
+    /* put all indices into frame */
+    nav_directory_offset_center(nav, sync->panel_gaki.layout.rc_files.dim);
+    if(nav && nav->parent) {
+        nav_directory_offset_center(nav->parent, sync->panel_gaki.layout.rc_files.dim);
+    }
+    if(nav && nav->index < array_len(nav->list)) {
+        nav_directory_offset_center(array_at(nav->list, nav->index), sync->panel_gaki.layout.rc_files.dim);
     }
 
     pthread_mutex_unlock(&sync->mtx);
@@ -237,12 +210,12 @@ bool panel_gaki_input(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync
     }
 
     if(ac.select_up) {
-        panel_gaki_select_up(&sync->panel_gaki, ac.select_up);
+        nav_directory_select_up(sync->panel_gaki.nav_directory, sync->panel_gaki.layout.rc_files.dim, ac.select_up);
         any = true;
     }
 
     if(ac.select_down) {
-        panel_gaki_select_down(&sync->panel_gaki, ac.select_down);
+        nav_directory_select_down(sync->panel_gaki.nav_directory, sync->panel_gaki.layout.rc_files.dim, ac.select_down);
         any = true;
     }
 
