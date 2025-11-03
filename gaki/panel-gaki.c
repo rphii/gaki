@@ -171,18 +171,20 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
             case 'H': ac.tab_prev = true; break;
             case 't': ac.tab_new = true; break;
             case 'f': ac.filter = true; break;
+            case 'F': ac.filter_clear = true; break;
             //case '/': gaki->ac. = 1; break;
             default: break;
         }
     }
 
-    if(ac.filter) {
+    if(ac.filter || ac.filter_clear) {
         any = true;
         panel_i->mtx = &sync->mtx;
         panel_i->text = &nav->filter;
         panel_i->visible = true;
         panel_i->config.rc = &sync->panel_gaki.layout.files.rc_filter;
         panel_i->config.prompt = so("filter: ");
+        if(ac.filter_clear) tui_text_line_clear(panel_i->text);
     }
 
     if(input->id == INPUT_CODE) {
