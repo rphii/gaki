@@ -63,10 +63,16 @@ void panel_input_render(Panel_Input *panel, Tui_Buffer *buffer) {
     pthread_mutex_lock(panel->mtx);
 
     //printff("\r %u %u %u %u",panel->layout.rc.anc.x,panel->layout.rc.anc.x,panel->layout.rc.dim.y,panel->layout.rc.dim.y);
-    tui_buffer_draw(buffer, panel->layout.rc, 0, 0, 0, panel->config.prompt);
-    tui_buffer_draw(buffer, panel->layout.rc, 0, 0, 0, panel->text->so);
+    Tui_Text_Line tmp = {0};
+    tui_text_line_fmt(&tmp, "%.*s%.*s", SO_F(panel->config.prompt), SO_F(panel->text->so));
+    tui_buffer_draw(buffer, panel->layout.rc, 0, 0, 0, tmp.so);
+
+    buffer->cursor.pt = panel->layout.rc.anc;
+    buffer->cursor.pt.x += tmp.visual_len;
+    buffer->cursor.id = TUI_CURSOR_BAR;
 
     pthread_mutex_unlock(panel->mtx);
+    so_free(&tmp.so);
 }
 
 

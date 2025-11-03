@@ -262,7 +262,10 @@ int main(int argc, char **argv) {
         }
         pthread_mutex_unlock(&gaki.sync_main.mtx);
 
+
         if(render_do && !draw_busy) {
+            gaki.buffer.cursor.id = TUI_CURSOR_NONE;
+
             tui_buffer_clear(&gaki.buffer);
             panel_gaki_render(&gaki.buffer, &gaki.sync_panel);
             panel_input_render(&gaki.panel_input, &gaki.buffer);
@@ -284,6 +287,7 @@ int main(int argc, char **argv) {
                 tui_screen_resize(&gaki.screen, gaki.buffer.dimension);
             }
             memcpy(gaki.screen.now.cells, gaki.buffer.cells, sizeof(Tui_Cell) * gaki.buffer.dimension.x * gaki.buffer.dimension.y);
+            gaki.screen.now.cursor = gaki.buffer.cursor;
             pthread_cond_signal(&gaki.sync_draw.cond);
             pthread_mutex_unlock(&gaki.sync_draw.mtx);
 
