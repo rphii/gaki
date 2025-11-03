@@ -103,9 +103,9 @@ void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *
     nav_directory_layout_from_rules(&layout->files, rc_files, nav, panel_i);
     if(nav) {
         nav_directory_layout_from_rules(&layout->parent, rc_parent, nav->parent, panel_i);
-    }
-    if(nav->index < array_len(nav->list)) {
-        nav_directory_layout_from_rules(&layout->preview, rc_preview, array_at(nav->list, nav->index), panel_i);
+        if(nav->index < array_len(nav->list)) {
+            nav_directory_layout_from_rules(&layout->preview, rc_preview, array_at(nav->list, nav->index), panel_i);
+        }
     }
 }
 
@@ -136,6 +136,9 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
         }
     }
     
+    /* make sure we still have something selected even if filtering */
+    nav_directory_select_any_next_visible(nav);
+
     /* put all indices into frame */
     nav_directory_offset_center(nav, sync->panel_gaki.layout.files.rc.dim);
     if(nav && nav->parent) {
@@ -256,149 +259,152 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         // }
     }
 
-    if(ac.select_up) {
-        nav_directory_select_up(sync->panel_gaki.nav_directory, sync->panel_gaki.layout.files.rc.dim, ac.select_up);
-        any = true;
-    }
-
-    if(ac.select_down) {
-        nav_directory_select_down(sync->panel_gaki.nav_directory, sync->panel_gaki.layout.files.rc.dim, ac.select_down);
-        any = true;
-    }
-
-    if(ac.select_right) {
-        Nav_Directory *nav = sync->panel_gaki.nav_directory;
-        if(nav && nav->index < array_len(nav->list)) {
-            nav = array_at(nav->list, nav->index);
+    bool any_shown = nav_directory_visible_count(nav);
+    if(any_shown) {
+        if(ac.select_up) {
+            nav_directory_select_up(sync->panel_gaki.nav_directory, sync->panel_gaki.layout.files.rc.dim, ac.select_up);
+            any = true;
         }
-        switch(nav->pwd.ref->stats.st_mode & S_IFMT) {
-            case S_IFDIR: {
-                sync->panel_gaki.nav_directory = nav;
-                any = true;
-            } break;
-            case S_IFREG: {
 
-                switch(nav->pwd.ref->signature_id) {
-                    case SO_FILESIG_MKV: {
+        if(ac.select_down) {
+            nav_directory_select_down(sync->panel_gaki.nav_directory, sync->panel_gaki.layout.files.rc.dim, ac.select_down);
+            any = true;
+        }
 
-#if 1
-                *flush = true;
-                So prg = so("xdg-open");
+        if(ac.select_right) {
+            Nav_Directory *nav = sync->panel_gaki.nav_directory;
+            if(nav && nav->index < array_len(nav->list)) {
+                nav = array_at(nav->list, nav->index);
+            }
+            switch(nav->pwd.ref->stats.st_mode & S_IFMT) {
+                case S_IFDIR: {
+                    sync->panel_gaki.nav_directory = nav;
+                    any = true;
+                } break;
+                case S_IFREG: {
 
-                // /* pause input */
-                // tui_sync_input_idle(sync_i);
-
-                pid_t pid = fork();
-                if(pid < 0) {
-                    // TODO make some kind of notice
-                    printff("\rFORK FAILED");
-                    exit(1);
-                } else if(!pid) {
-
-                    int fd = open("/dev/null", O_WRONLY | O_CREAT, 0666);
-                    dup2(fd, 1);
-                    dup2(fd, 2);
-
-                    char *cprg = so_dup(prg);
-                    char *cpath = so_dup(nav->pwd.ref->path);
-                    char *cargs[] = { cprg, cpath, 0 };
-                    execvp(cprg, cargs);
-                    close(fd);
-                    _exit(EXIT_FAILURE);
-                }
-
-                // int status;
-                // waitpid(pid, &status, 0);
-
-                // if(status) {
-                //     // TODO make some kind of notice
-                //     printff("\rCHILD FAILED");
-                //     exit(1);
-                // }
-
-                // /* resume input */
-                // tui_sync_input_wake(sync_i);
-
-                // /* issue new read */
-                // nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav);
-
-                // /* issue a redraw */
-                // tui_sync_redraw(sync_d);
-#endif
-
-                    } break;
-
-                    default: {
+                    switch(nav->pwd.ref->signature_id) {
+                        case SO_FILESIG_MKV: {
 
 #if 1
-                *flush = true;
-                So ed = SO;
-                so_env_get(&ed, so("EDITOR"));
-                if(!so_len(ed)) {
-                    // TODO make some kind of notice
-                    printff("\rNO EDITOR FOUND");
-                    exit(1);
-                }
+                            *flush = true;
+                            So prg = so("xdg-open");
 
-                /* pause input */
-                tui_sync_input_idle(sync_i);
+                            // /* pause input */
+                            // tui_sync_input_idle(sync_i);
 
-                pid_t pid = fork();
-                if(pid < 0) {
-                    // TODO make some kind of notice
-                    printff("\rFORK FAILED");
-                    exit(1);
-                } else if(!pid) {
-                    char *ced = so_dup(ed);
-                    char *cpath = so_dup(nav->pwd.ref->path);
-                    char *cargs[] = { ced, cpath, 0 };
-                    system("tput rmcup");
-                    execvp(ced, cargs);
-                    _exit(EXIT_FAILURE);
-                }
+                            pid_t pid = fork();
+                            if(pid < 0) {
+                                // TODO make some kind of notice
+                                printff("\rFORK FAILED");
+                                exit(1);
+                            } else if(!pid) {
 
-                int status;
-                waitpid(pid, &status, 0);
+                                int fd = open("/dev/null", O_WRONLY | O_CREAT, 0666);
+                                dup2(fd, 1);
+                                dup2(fd, 2);
 
-                if(status) {
-                    // TODO make some kind of notice
-                    printff("\rCHILD FAILED");
-                    exit(1);
-                }
+                                char *cprg = so_dup(prg);
+                                char *cpath = so_dup(nav->pwd.ref->path);
+                                char *cargs[] = { cprg, cpath, 0 };
+                                execvp(cprg, cargs);
+                                close(fd);
+                                _exit(EXIT_FAILURE);
+                            }
 
-                system("tput smcup");
-                tui_write_cstr(TUI_ESC_CODE_MOUSE_ON);
+                            // int status;
+                            // waitpid(pid, &status, 0);
 
-                so_free(&nav->pwd.ref->content.text);
-                nav->pwd.have_read = false;
-                nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav);
+                            // if(status) {
+                            //     // TODO make some kind of notice
+                            //     printff("\rCHILD FAILED");
+                            //     exit(1);
+                            // }
 
-                /* resume input */
-                tui_sync_input_wake(sync_i);
+                            // /* resume input */
+                            // tui_sync_input_wake(sync_i);
 
-                /* unload file */
-                pthread_mutex_lock(&nav->pwd.ref->mtx);
-                so_free(&nav->pwd.ref->content.text);
-                nav->pwd.ref->loaded = false;
-                nav->pwd.ref->loaded_done = false;
-                pthread_mutex_unlock(&nav->pwd.ref->mtx);
+                            // /* issue new read */
+                            // nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav);
 
-                pthread_mutex_lock(&nav->pwd.mtx);
-                nav->pwd.have_read = false;
-                pthread_mutex_unlock(&nav->pwd.mtx);
-
-                /* issue new read */
-                nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav);
-
-                /* issue a redraw */
-                tui_sync_redraw(sync_d);
+                            // /* issue a redraw */
+                            // tui_sync_redraw(sync_d);
 #endif
 
-                    } break;
-                }
+                        } break;
 
-            } break;
-            default: break;
+                        default: {
+
+#if 1
+                            *flush = true;
+                            So ed = SO;
+                            so_env_get(&ed, so("EDITOR"));
+                            if(!so_len(ed)) {
+                                // TODO make some kind of notice
+                                printff("\rNO EDITOR FOUND");
+                                exit(1);
+                            }
+
+                            /* pause input */
+                            tui_sync_input_idle(sync_i);
+
+                            pid_t pid = fork();
+                            if(pid < 0) {
+                                // TODO make some kind of notice
+                                printff("\rFORK FAILED");
+                                exit(1);
+                            } else if(!pid) {
+                                char *ced = so_dup(ed);
+                                char *cpath = so_dup(nav->pwd.ref->path);
+                                char *cargs[] = { ced, cpath, 0 };
+                                system("tput rmcup");
+                                execvp(ced, cargs);
+                                _exit(EXIT_FAILURE);
+                            }
+
+                            int status;
+                            waitpid(pid, &status, 0);
+
+                            if(status) {
+                                // TODO make some kind of notice
+                                printff("\rCHILD FAILED");
+                                exit(1);
+                            }
+
+                            system("tput smcup");
+                            tui_write_cstr(TUI_ESC_CODE_MOUSE_ON);
+
+                            so_free(&nav->pwd.ref->content.text);
+                            nav->pwd.have_read = false;
+                            nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav);
+
+                            /* resume input */
+                            tui_sync_input_wake(sync_i);
+
+                            /* unload file */
+                            pthread_mutex_lock(&nav->pwd.ref->mtx);
+                            so_free(&nav->pwd.ref->content.text);
+                            nav->pwd.ref->loaded = false;
+                            nav->pwd.ref->loaded_done = false;
+                            pthread_mutex_unlock(&nav->pwd.ref->mtx);
+
+                            pthread_mutex_lock(&nav->pwd.mtx);
+                            nav->pwd.have_read = false;
+                            pthread_mutex_unlock(&nav->pwd.mtx);
+
+                            /* issue new read */
+                            nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav);
+
+                            /* issue a redraw */
+                            tui_sync_redraw(sync_d);
+#endif
+
+                        } break;
+                    }
+
+                } break;
+                default: break;
+            }
         }
     }
 
@@ -451,11 +457,12 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
     return any;
 }
 
-void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, Panel_Gaki *panel, Tui_Rect rc) {
+void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, Panel_Gaki *panel, Nav_Directory_Layout layout) {
 
     /* print file list */
     Tui_Color dir_fg = { .type = TUI_COLOR_8, .col8 = 0 };
     Tui_Color dir_bg = { .type = TUI_COLOR_8, .col8 = 7 };
+    Tui_Rect rc = layout.rc;
     rc.dim.y = 1;
     size_t list_len = array_len(nav->list);
     //printff("RENDER: [%.*s] LEN %zu", SO_F(nav->pwd.ref->path), list_len);
@@ -469,6 +476,18 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
         so_fmt(tmp, "%.*s", SO_F(so_get_nodir(nav_sub->pwd.ref->path)));
         tui_buffer_draw(buffer, rc, fg, bg, 0, *tmp);
         ++rc.anc.y;
+    }
+
+    if(nav && nav->search.visual_len) {
+        Tui_Color search_fg = { .type = TUI_COLOR_8, .col8 = 0 };
+        Tui_Color search_bg = { .type = TUI_COLOR_8, .col8 = 1 };
+        tui_buffer_draw(buffer, layout.rc_search, &search_fg, &search_bg, 0, nav->search.so);
+    }
+
+    if(nav && nav->filter.visual_len) {
+        Tui_Color filter_fg = { .type = TUI_COLOR_8, .col8 = 0 };
+        Tui_Color filter_bg = { .type = TUI_COLOR_8, .col8 = 6 };
+        tui_buffer_draw(buffer, layout.rc_filter, &filter_fg, &filter_bg, 0, nav->filter.so);
     }
 }
 
@@ -490,7 +509,7 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     Nav_File_Info *pwd = &nav->pwd;
     if(!pwd->ref) goto exit;
 
-    panel_gaki_render_nav_dir(buffer, &tmp, nav, panel, panel->layout.files.rc);
+    panel_gaki_render_nav_dir(buffer, &tmp, nav, panel, panel->layout.files);
 
     /* draw current dir/file/type */
     Tui_Color bar_bg = { .type = TUI_COLOR_8, .col8 = 1 };
@@ -540,14 +559,14 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
                 tui_buffer_draw(buffer, panel->layout.preview.rc, 0, 0, 0, current->pwd.ref->content.text);
             } break;
             case S_IFDIR: {
-                panel_gaki_render_nav_dir(buffer, &tmp, current, panel, panel->layout.preview.rc);
+                panel_gaki_render_nav_dir(buffer, &tmp, current, panel, panel->layout.preview);
             } break;
         }
     }
 
     /* draw parent */
     if(nav && nav->parent) {
-        panel_gaki_render_nav_dir(buffer, &tmp, nav->parent, panel, panel->layout.parent.rc);
+        panel_gaki_render_nav_dir(buffer, &tmp, nav->parent, panel, panel->layout.parent);
     }
 
     /* draw vertical splits */
@@ -562,12 +581,6 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
         so_extend(&tmp, so("│\n"));
     }
     tui_buffer_draw(buffer, panel->layout.rc_split_parent, 0, 0, 0, tmp);
-
-    if(nav && nav->filter.visual_len) {
-        Tui_Color filter_fg = { .type = TUI_COLOR_8, .col8 = 0 };
-        Tui_Color filter_bg = { .type = TUI_COLOR_8, .col8 = 6 };
-        tui_buffer_draw(buffer, panel->layout.files.rc_filter, &filter_fg, &filter_bg, 0, nav->filter.so);
-    }
 
 exit:
     pthread_mutex_unlock(&sync->mtx);

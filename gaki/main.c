@@ -104,7 +104,7 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
         tui_sync_main_update(&gaki->sync_main);
 #endif
 
-        if(!tui_input_process(&gaki->sync_main, &gaki->sync_input, &gaki->sync_draw, &gaki->input_gen)) break;
+        if(!tui_input_process(&gaki->sync_main, &gaki->sync_input, &gaki->input_gen)) break;
     }
     return 0;
 }
