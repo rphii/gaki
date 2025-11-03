@@ -148,6 +148,10 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
         nav_directory_offset_center(array_at(nav->list, nav->index), sync->panel_gaki.layout.files.rc.dim);
     }
 
+    if(nav && so_len(nav->search.so)) {
+        nav_directory_search_next(nav, nav->index, nav->search.so);
+    }
+
     pthread_mutex_unlock(&sync->mtx);
 }
 
@@ -172,6 +176,10 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
             case 't': ac.tab_new = true; break;
             case 'f': ac.filter = true; break;
             case 'F': ac.filter_clear = true; break;
+            case '/': ac.search = true; break;
+            case '?': ac.search_clear = true; break;
+            case 'n': ac.search_next = true; break;
+            case 'N': ac.search_prev = true; break;
             //case '/': gaki->ac. = 1; break;
             default: break;
         }
@@ -183,8 +191,18 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         panel_i->text = &nav->filter;
         panel_i->visible = true;
         panel_i->config.rc = &sync->panel_gaki.layout.files.rc_filter;
-        panel_i->config.prompt = so("filter: ");
+        panel_i->config.prompt = so(" ");
         if(ac.filter_clear) tui_text_line_clear(panel_i->text);
+    }
+
+    if(ac.search || ac.search_clear) {
+        any = true;
+        panel_i->mtx = &sync->mtx;
+        panel_i->text = &nav->search;
+        panel_i->visible = true;
+        panel_i->config.rc = &sync->panel_gaki.layout.files.rc_search;
+        panel_i->config.prompt = so(" ");
+        if(ac.search_clear) tui_text_line_clear(panel_i->text);
     }
 
     if(input->id == INPUT_CODE) {
@@ -264,6 +282,20 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
 
     bool any_shown = nav_directory_visible_count(nav);
     if(any_shown) {
+
+        if(so_len(nav->search.so)) {
+            if(ac.search_next) {
+                size_t next = nav->index + 1 < array_len(nav->list) ? nav->index + 1 : 0;
+                nav_directory_search_next(nav, next, nav->search.so);
+                any = true;
+            }
+            if(ac.search_prev) {
+                size_t prev = nav->index ? nav->index - 1 : array_len(nav->list) - 1;
+                nav_directory_search_prev(nav, prev, nav->search.so);
+                any = true;
+            }
+        }
+
         if(ac.select_up) {
             nav_directory_select_up(sync->panel_gaki.nav_directory, ac.select_up);
             any = true;
@@ -465,32 +497,76 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
     /* print file list */
     Tui_Color dir_fg = { .type = TUI_COLOR_8, .col8 = 0 };
     Tui_Color dir_bg = { .type = TUI_COLOR_8, .col8 = 7 };
+    Tui_Color search_fg = { .type = TUI_COLOR_8, .col8 = 3 };
+    Tui_Color search_fg2 = { .type = TUI_COLOR_8, .col8 = 0 };
+    Tui_Color search_bg2 = { .type = TUI_COLOR_8, .col8 = 3 };
     Tui_Rect rc = layout.rc;
     rc.dim.y = 1;
     size_t list_len = array_len(nav->list);
+    Tui_Buffer_Cache tbc = {0};
     //printff("RENDER: [%.*s] LEN %zu", SO_F(nav->pwd.ref->path), list_len);
     for(size_t i = nav->offset; i < list_len; ++i) {
         if(rc.anc.y >= buffer->dimension.y) break;
         Nav_Directory *nav_sub = array_at(nav->list, i);
         if(!nav_directory_visible_check(nav_sub, nav->filter.so)) continue;
-        Tui_Color *fg = (nav->index == i) ? &dir_fg : 0;
-        Tui_Color *bg = (nav->index == i) ? &dir_bg : 0;
+        tbc.fg = (nav->index == i) ? &dir_fg : 0;
+        tbc.bg = (nav->index == i) ? &dir_bg : 0;
+        tbc.pt = (Tui_Point){0};
+        tbc.fill = false;
+        tbc.rect = rc;
         so_clear(tmp);
-        so_fmt(tmp, "%.*s", SO_F(so_get_nodir(nav_sub->pwd.ref->path)));
-        tui_buffer_draw(buffer, rc, fg, bg, 0, *tmp);
+        So name = so_get_nodir(nav_sub->pwd.ref->path);
+        if(so_len(nav->search.so)) {
+            size_t nfind = so_find_sub(name, nav->search.so, true);
+            //printff("\r%zu/%zu:%.*s",nfind, so_len(name),SO_F(name));
+            if(nfind < so_len(name)) {
+
+                so_extend(tmp, so_iE(name, nfind));
+                tui_buffer_draw_cache(buffer, &tbc, *tmp);
+                //printff("\r1 %u,%u",tbc.pt.x,tbc.pt.y);
+
+                tbc.bg = (nav->index == i) ? &search_bg2 : tbc.bg;
+                tbc.fg = (nav->index == i) ? &search_fg2 : &search_fg;
+
+                so_clear(tmp);
+                so_extend(tmp, nav->search.so);
+                tui_buffer_draw_cache(buffer, &tbc, *tmp);
+                //printff("\r2 %u,%u",tbc.pt.x,tbc.pt.y);
+
+                tbc.fg = (nav->index == i) ? &dir_fg : 0;
+                tbc.bg = (nav->index == i) ? &dir_bg : 0;
+
+                so_clear(tmp);
+                so_extend(tmp, so_i0(name, nfind + so_len(nav->search.so)));
+
+                tbc.fill = true;
+            } else {
+                so_fmt(tmp, "%.*s", SO_F(name));
+                tbc.fill = true;
+            }
+        } else {
+            so_fmt(tmp, "%.*s", SO_F(name));
+            tbc.fill = true;
+        }
+        ASSERT_ARG(tbc.fill);
+        tui_buffer_draw_cache(buffer, &tbc, *tmp);
         ++rc.anc.y;
     }
 
     if(nav && nav->search.visual_len) {
         Tui_Color search_fg = { .type = TUI_COLOR_8, .col8 = 0 };
-        Tui_Color search_bg = { .type = TUI_COLOR_8, .col8 = 1 };
-        tui_buffer_draw(buffer, layout.rc_search, &search_fg, &search_bg, 0, nav->search.so);
+        Tui_Color search_bg = { .type = TUI_COLOR_8, .col8 = 3 };
+        so_clear(tmp);
+        so_fmt(tmp, " %.*s", SO_F(nav->search.so));
+        tui_buffer_draw(buffer, layout.rc_search, &search_fg, &search_bg, 0, *tmp);
     }
 
     if(nav && nav->filter.visual_len) {
         Tui_Color filter_fg = { .type = TUI_COLOR_8, .col8 = 7 };
         Tui_Color filter_bg = { .type = TUI_COLOR_8, .col8 = 4 };
-        tui_buffer_draw(buffer, layout.rc_filter, &filter_fg, &filter_bg, 0, nav->filter.so);
+        so_clear(tmp);
+        so_fmt(tmp, " %.*s", SO_F(nav->filter.so));
+        tui_buffer_draw(buffer, layout.rc_filter, &filter_fg, &filter_bg, 0, *tmp);
     }
 }
 
