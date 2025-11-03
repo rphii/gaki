@@ -487,8 +487,8 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
     }
 
     if(nav && nav->filter.visual_len) {
-        Tui_Color filter_fg = { .type = TUI_COLOR_8, .col8 = 0 };
-        Tui_Color filter_bg = { .type = TUI_COLOR_8, .col8 = 6 };
+        Tui_Color filter_fg = { .type = TUI_COLOR_8, .col8 = 7 };
+        Tui_Color filter_bg = { .type = TUI_COLOR_8, .col8 = 4 };
         tui_buffer_draw(buffer, layout.rc_filter, &filter_fg, &filter_bg, 0, nav->filter.so);
     }
 }
@@ -511,6 +511,7 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     Nav_File_Info *pwd = &nav->pwd;
     if(!pwd->ref) goto exit;
 
+    bool any_shown = nav_directory_visible_count(nav);
     panel_gaki_render_nav_dir(buffer, &tmp, nav, panel, panel->layout.files);
 
     /* draw current dir/file/type */
@@ -519,7 +520,7 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     Tui_Fx bar_fx = { .bold = true };
     Nav_Directory *current = nav->index < array_len(nav->list) ? array_at(nav->list, nav->index) : 0;
     size_t tab_len = array_len(panel->tabs);
-    if(current && nav->pwd.ref) {
+    if(any_shown && current && nav->pwd.ref) {
 
         switch(current->pwd.ref->stats.st_mode & S_IFMT) {
             case S_IFDIR: { bar_bg.col8 = 4; } break;
