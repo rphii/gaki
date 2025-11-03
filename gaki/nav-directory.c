@@ -77,6 +77,7 @@ void nav_directory_select_any_next_visible(Nav_Directory *nav) {
     if(!nav) return;
     size_t len_filter = nav_directory_visible_count(nav);
     size_t len_all = array_len(nav->list);
+    if(len_all == len_filter) return;
     if(!len_filter) return;
     for(size_t i = nav->index; i < nav->index + len_all; ++i) {
         Nav_Directory *nav_sub = array_at(nav->list, i % len_all);
@@ -91,11 +92,13 @@ void nav_directory_select_any_prev_visible(Nav_Directory *nav) {
     if(!nav) return;
     size_t len_filter = nav_directory_visible_count(nav);
     size_t len_all = array_len(nav->list);
+    //if(len_all == len_filter) return;
     if(!len_filter) return;
-    for(size_t i = nav->index + len_all; i > nav->index; --i) {
-        Nav_Directory *nav_sub = array_at(nav->list, (i - 1) % len_all);
+    for(size_t i = 0; i < len_all; ++i) {
+        size_t j = nav->index >= i ? nav->index - i : len_all - i - 1;
+        Nav_Directory *nav_sub = array_at(nav->list, j);
         if(nav_directory_visible_check(nav_sub, nav->filter.so)) {
-            nav->index = (i - 1) % len_all;
+            nav->index = j;
             break;
         }
     }
