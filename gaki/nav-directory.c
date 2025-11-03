@@ -147,6 +147,39 @@ void nav_directory_offset_center(Nav_Directory *nav, Tui_Point dim) {
     }
 }
 
+void nav_directory_search_next(Nav_Directory *nav, size_t index, So search) {
+    if(!nav) return;
+    size_t len = array_len(nav->list);
+    if(!len) return;
+    //printff("\rSEARCH");
+    for(size_t i = 0; i < len; ++i) {
+        size_t j = (i + index) % len;
+        //printff("\r%zu",j);
+        Nav_Directory *nav_sub = array_at(nav->list, j);
+        if(!nav_directory_visible_check(nav_sub, nav->filter.so)) continue;
+        So name = so_get_nodir(nav_sub->pwd.ref->path);
+        if(so_find_sub(name, search, true) < so_len(name)) {
+            nav->index = j;
+            break;
+        }
+    }
+}
+
+void nav_directory_search_prev(Nav_Directory *nav, size_t index, So search) {
+    if(!nav) return;
+    size_t len = array_len(nav->list);
+    if(!len) return;
+    for(size_t i = 0; i < len; ++i) {
+        size_t j = (index >= i ? index - i : len + index - i) % len;
+        Nav_Directory *nav_sub = array_at(nav->list, j);
+        if(!nav_directory_visible_check(nav_sub, nav->filter.so)) continue;
+        So name = so_get_nodir(nav_sub->pwd.ref->path);
+        if(so_find_sub(name, search, true) < so_len(name)) {
+            nav->index = j;
+            break;
+        }
+    }
+}
 
 void nav_directories_sort(Nav_Directories *vec) {
     /* shell sort, https://rosettacode.org/wiki/Sorting_algorithms/Shell_sort */
