@@ -215,7 +215,8 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         if(nav && input->mouse.l.down) {
             if(tui_rect_encloses_point(sync->panel_gaki.layout.files.rc, input->mouse.pos)) {
                 Tui_Point pt = tui_rect_project_point(sync->panel_gaki.layout.files.rc, input->mouse.pos);
-                nav->index = pt.y + nav->offset;
+                nav_directory_select_at(nav, pt.y + nav->offset);
+                //nav->index = pt.y + nav->offset;
                 any = true;
             }
         }
@@ -225,7 +226,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                 if(nav->parent) {
                     Nav_Directory *replace = nav->parent;
                     if(pt.y + replace->offset < array_len(replace->list)) {
-                        replace->index = pt.y + replace->offset;
+                        nav_directory_select_at(replace, pt.y + nav->offset);
                     }
                     sync->panel_gaki.nav_directory = replace;
                     any = true;
@@ -238,7 +239,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                     switch(replace->pwd.ref->stats.st_mode & S_IFMT) {
                         case S_IFDIR: {
                             if(pt.y + replace->offset < array_len(replace->list)) {
-                                replace->index = pt.y;
+                                nav_directory_select_at(replace, pt.y + nav->offset);
                             }
                             sync->panel_gaki.nav_directory = replace;
                             any = true;
@@ -264,12 +265,12 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
     bool any_shown = nav_directory_visible_count(nav);
     if(any_shown) {
         if(ac.select_up) {
-            nav_directory_select_up(sync->panel_gaki.nav_directory, sync->panel_gaki.layout.files.rc.dim, ac.select_up);
+            nav_directory_select_up(sync->panel_gaki.nav_directory, ac.select_up);
             any = true;
         }
 
         if(ac.select_down) {
-            nav_directory_select_down(sync->panel_gaki.nav_directory, sync->panel_gaki.layout.files.rc.dim, ac.select_down);
+            nav_directory_select_down(sync->panel_gaki.nav_directory, ac.select_down);
             any = true;
         }
 

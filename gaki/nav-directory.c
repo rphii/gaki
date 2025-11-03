@@ -54,7 +54,7 @@ void x() {
 
 #include <dirent.h>
 
-void nav_directory_select_up(Nav_Directory *nav, Tui_Point dim, size_t n) {
+void nav_directory_select_up(Nav_Directory *nav, size_t n) {
     if(!nav) return;
     if(!nav->index) {
         nav->index = array_len(nav->list) - 1;
@@ -64,11 +64,35 @@ void nav_directory_select_up(Nav_Directory *nav, Tui_Point dim, size_t n) {
     nav_directory_select_any_prev_visible(nav);
 }
 
-void nav_directory_select_down(Nav_Directory *nav, Tui_Point dim, size_t n) {
+void nav_directory_select_down(Nav_Directory *nav, size_t n) {
     if(!nav) return;
     ++nav->index;
     if(nav->index >= array_len(nav->list)) {
         nav->index = 0;
+    }
+    nav_directory_select_any_next_visible(nav);
+}
+
+void nav_directory_select_at(Nav_Directory *nav, size_t i) {
+    if(!nav) return;
+    size_t len_filter = nav_directory_visible_count(nav);
+    size_t len_all = array_len(nav->list);
+    if(i > len_filter) {
+        nav->index = SIZE_MAX;
+    } else if(len_filter == len_all) {
+        nav->index = i;
+    } else {
+        for(size_t ii = 0, j = 0; j < len_all; ++j) {
+            Nav_Directory *nav_sub = array_at(nav->list, j);
+            //printff("\rfind %zu @ %zu", i,j);
+            if(nav_directory_visible_check(nav_sub, nav->filter.so)) {
+                //printff("\r  found %zu",ii);
+                if(ii++ >= i) {
+                    nav->index = j;
+                    break;
+                }
+            }
+        }
     }
     nav_directory_select_any_next_visible(nav);
 }
