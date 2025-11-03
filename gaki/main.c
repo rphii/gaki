@@ -104,7 +104,7 @@ void *pw_queue_process_input(Pw *pw, bool *quit, void *void_ctx) {
         tui_sync_main_update(&gaki->sync_main);
 #endif
 
-        if(!tui_input_process(&gaki->sync_main, &gaki->sync_input, &gaki->input_gen)) break;
+        if(!tui_input_process(&gaki->sync_main, &gaki->sync_input, &gaki->sync_draw, &gaki->input_gen)) break;
     }
     return 0;
 }
@@ -245,8 +245,9 @@ int main(int argc, char **argv) {
 
         if(gaki.quit) break;
 
+        bool draw_busy = true;
         pthread_mutex_lock(&gaki.sync_draw.mtx);
-        bool draw_busy = gaki.sync_draw.draw_done < gaki.sync_draw.draw_do;
+        draw_busy = gaki.sync_draw.draw_done < gaki.sync_draw.draw_do;
         //printff("\rdraw busy:%u",draw_busy);
         if(draw_busy) {
             ++gaki.sync_draw.draw_skip;
