@@ -148,8 +148,10 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
         nav_directory_offset_center(array_at(nav->list, nav->index), sync->panel_gaki.layout.files.rc.dim);
     }
 
-    if(nav && so_len(nav->search.so)) {
-        nav_directory_search_next(nav, nav->index, nav->search.so);
+    if(panel_i->visible && (panel_i->config.rc == &sync->panel_gaki.layout.files.rc_search)) {
+        if(nav && so_len(nav->search.so)) {
+            nav_directory_search_next(nav, nav->index, nav->search.so);
+        }
     }
 
     pthread_mutex_unlock(&sync->mtx);
