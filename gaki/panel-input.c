@@ -46,6 +46,12 @@ bool panel_input_input(Panel_Input *panel, Tui_Sync_Main *sync_m, Tui_Input *inp
             tui_text_line_push(panel->text, input->text);
             update = true;
         } break;
+        case INPUT_MOUSE: {
+            if(input->mouse.l.press) {
+                panel->visible = false;
+                update = true;
+            }
+        } break;
         default: break;
     }
     pthread_mutex_unlock(panel->mtx);
