@@ -555,7 +555,7 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     }
 
     /* draw content */
-    if(current && current->pwd.ref->loaded) {
+    if(any_shown && current && current->pwd.ref->loaded) {
         //tui_buffer_draw(buffer, panel->layout.rc_preview, &bar_fg, &bar_bg, &bar_fx, so("HAVE READ"));
         switch(current->pwd.ref->stats.st_mode & S_IFMT) {
             case S_IFREG: {
