@@ -95,7 +95,7 @@ void nav_directory_select_any_prev_visible(Nav_Directory *nav) {
     //if(len_all == len_filter) return;
     if(!len_filter) return;
     for(size_t i = 0; i < len_all; ++i) {
-        size_t j = nav->index >= i ? nav->index - i : len_all - i - 1;
+        size_t j = nav->index >= i ? nav->index - i : len_all + nav->index - i;
         Nav_Directory *nav_sub = array_at(nav->list, j);
         if(nav_directory_visible_check(nav_sub, nav->filter.so)) {
             nav->index = j;
