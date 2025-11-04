@@ -44,7 +44,7 @@ meson install -C build
 For e.g. search or filter:
 
 - Confirm with `enter`
-- Abort with `esc`
+- Clear + exit text with `esc`
 
 ## SOON™
 
