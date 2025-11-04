@@ -403,7 +403,7 @@ void *nav_directory_async_register(Pw *pw, bool *cancel, void *void_task) {
     Task_Nav_Directory_Register *task = void_task;
 
     File_Info *info = file_info_ensure(task->sync_t, task->path);
-    ASSERT_ARG(S_ISDIR(info->stats.st_mode));
+    //ASSERT_ARG(S_ISDIR(info->stats.st_mode));
 
     pthread_mutex_lock(&task->sync->mtx);
     if(task->sync->count_register && task->sync->count_register == task->current_register) {

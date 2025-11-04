@@ -54,7 +54,7 @@ File_Info *file_info_ensure(Gaki_Sync_T_File_Info *sync, So path) {
         File_Info info_new = {0};
         info_new.path = so_clone(path);
         char *cpath = so_dup(info_new.path);
-        stat(cpath, &info_new.stats);
+        info_new.exists = !stat(cpath, &info_new.stats);
         free(cpath);
         so_filesig(path, &info_new.signature_unsure, &info_new.signature_id);
         T_File_InfoKV *kv = t_file_info_once(&sync->t_file_info, info_new.path, &info_new);
