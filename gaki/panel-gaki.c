@@ -482,7 +482,8 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
 
     if(ac.select_left) {
         Nav_Directory *nav = sync->panel_gaki.nav_directory;
-        if(nav && nav->parent) {
+        Nav_Directory *parent = nav ? nav->parent : 0;
+        if(parent && parent->pwd.ref && array_len(parent->pwd.ref->content.files)) {
             sync->panel_gaki.nav_directory = nav->parent;
             any = true;
         }
