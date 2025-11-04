@@ -22,7 +22,8 @@ meson install -C build
 - mouse support _(parent, current and preview pane + scrolling)_
 - sorted directory preview _(via filename)_
 - auto-resizable window
-- edit regular files in-program
+- edit regular files, open .mkv videos
+- search and filter a directory and easily see filters in parent/child
 
 ## ⌨️ Hotkeys
 
