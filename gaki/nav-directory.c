@@ -394,6 +394,9 @@ void nav_directory_dispatch_readany(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_F
         } break;
         default: break;
     }
+    if(!dir->pwd.ref->exists) {
+        dir->pwd.have_read = true;
+    }
 }
 
 void *nav_directory_async_register(Pw *pw, bool *cancel, void *void_task) {
