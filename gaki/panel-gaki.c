@@ -199,6 +199,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
             case '?': ac.search_clear = true; break;
             case 'n': ac.search_next = true; break;
             case 'N': ac.search_prev = true; break;
+            case 'v': ac.select_toggle = true; break;
             //case '/': gaki->ac. = 1; break;
             default: break;
         }
@@ -313,6 +314,12 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                 nav_directory_search_prev(nav, prev, nav->search.so);
                 any = true;
             }
+        }
+
+        if(ac.select_toggle && nav->index < array_len(nav->list)) {
+            Nav_Directory *nav_sub = array_at(nav->list, nav->index);
+            nav_sub->pwd.selected = !nav_sub->pwd.selected;
+            any = true;
         }
 
         if(ac.select_up) {
@@ -515,6 +522,9 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
 void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, Panel_Gaki *panel, Nav_Directory_Layout layout) {
 
     /* print file list */
+    //Tui_Color sel_fg = { .type = TUI_COLOR_8, .col8 = 0 };
+    //Tui_Color sel_bg = { .type = TUI_COLOR_8, .col8 = 7 };
+    //Tui_Fx    sel_fx = { .bold = true, .it = true, .ul = true };
     Tui_Color dir_fg = { .type = TUI_COLOR_8, .col8 = 0 };
     Tui_Color dir_bg = { .type = TUI_COLOR_8, .col8 = 7 };
     Tui_Color search_fg = { .type = TUI_COLOR_8, .col8 = 3 };
@@ -531,6 +541,8 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
         if(!nav_directory_visible_check(nav_sub, nav->filter.so)) continue;
         tbc.fg = (nav->index == i) ? &dir_fg : 0;
         tbc.bg = (nav->index == i) ? &dir_bg : 0;
+        //tbc.fx = (nav_sub->pwd.selected) ? &sel_fx : 0;
+        //tbc.fx = (nav->index == i) ? &dir_fx : 0;
         tbc.pt = (Tui_Point){0};
         tbc.fill = false;
         tbc.rect = rc;
@@ -555,6 +567,8 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
 
                 tbc.fg = (nav->index == i) ? &dir_fg : 0;
                 tbc.bg = (nav->index == i) ? &dir_bg : 0;
+                //tbc.fg = (nav->index == i) ? &dir_fg : 0;
+                //tbc.bg = (nav->index == i) ? &dir_bg : 0;
 
                 so_clear(tmp);
                 so_extend(tmp, so_i0(name, nfind + so_len(nav->search.so)));
