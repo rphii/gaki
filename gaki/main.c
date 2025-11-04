@@ -207,10 +207,9 @@ int main(int argc, char **argv) {
         /* TODO iterate over i and make tabs/splits */
         nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, so_l(argv[1]));
     } else {
-        So pwd = SO;
-        so_env_get(&pwd, so("PWD"));
-        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, pwd);
-        so_free(&pwd);
+        char ccwd[4096];
+        getcwd(ccwd, 4096);
+        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, so_l(ccwd));
     }
 
     fast_srand(time(0));
