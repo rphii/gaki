@@ -157,7 +157,7 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
     pthread_mutex_unlock(&sync->mtx);
 }
 
-bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Tui_Sync_Input *sync_i, Tui_Sync_Draw *sync_d, Tui_Input *input, Panel_Input *panel_i, bool *flush, bool *quit) {
+bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Tui_Sync_Input *sync_i, Tui_Sync_Draw *sync_d, Gaki_Config *cfg, Tui_Input *input, Panel_Input *panel_i, bool *flush, bool *quit) {
 
     pthread_mutex_lock(&sync->mtx);
 
@@ -193,7 +193,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         panel_i->text = &nav->filter;
         panel_i->visible = true;
         panel_i->config.rc = &sync->panel_gaki.layout.files.rc_filter;
-        panel_i->config.prompt = so(" ");
+        panel_i->config.prompt =  cfg->filter_prefix;
         if(ac.filter_clear) tui_text_line_clear(panel_i->text);
     }
 
@@ -203,7 +203,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         panel_i->text = &nav->search;
         panel_i->visible = true;
         panel_i->config.rc = &sync->panel_gaki.layout.files.rc_search;
-        panel_i->config.prompt = so(" ");
+        panel_i->config.prompt = cfg->search_prefix;
         if(ac.search_clear) tui_text_line_clear(panel_i->text);
     }
 
