@@ -56,8 +56,10 @@ void x() {
 
 void nav_directory_select_up(Nav_Directory *nav, size_t n) {
     if(!nav) return;
+    size_t len_list = array_len(nav->list);
+    if(nav->index >= len_list) nav->index = len_list;
     if(!nav->index) {
-        nav->index = array_len(nav->list) - 1;
+        nav->index = len_list - 1;
     } else {
         --nav->index;
     }
