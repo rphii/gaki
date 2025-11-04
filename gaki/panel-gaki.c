@@ -129,10 +129,16 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
 
     Nav_Directory *nav = sync->panel_gaki.nav_directory;
     if(nav && nav->index < array_len(nav->list)) {
-        Nav_Directory *nav_sub = array_at(nav->list, nav->index);
-        if(nav_sub && nav_sub->pwd.ref) {
-            nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav_sub);
+        Nav_Directory *current = array_at(nav->list, nav->index);
+        if(current && current->pwd.ref) {
+            nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, current);
         }
+        pthread_mutex_lock(&current->pwd.mtx);
+        if(current->pwd.ref->signature_id == SO_FILESIG_PNG ||
+           current->pwd.ref->signature_id == SO_FILESIG_JPEG) {
+            task_file_info_image_cvt_dispatch(pw, current->pwd.ref, sync->panel_gaki.layout.preview.rc.dim, sync_m);
+        }
+        pthread_mutex_unlock(&current->pwd.mtx);
     }
     //if(nav && nav->pwd.ref) {
     //    usleep(1e5);printff("\rnav->pwd.ref: %p, have_read %u, exists %u", nav->pwd.ref, nav->pwd.have_read, nav->pwd.ref->exists);usleep(1e6);
@@ -345,6 +351,8 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                 case S_IFREG: {
 
                     switch(nav->pwd.ref->signature_id) {
+                        case SO_FILESIG_PNG:
+                        case SO_FILESIG_JPEG:
                         case SO_FILESIG_MKV: {
 
 #if 1
@@ -667,15 +675,25 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     /* draw content */
     if(any_shown && current && current->pwd.ref->loaded) {
         //tui_buffer_draw(buffer, panel->layout.rc_preview, &bar_fg, &bar_bg, &bar_fx, so("HAVE READ"));
+        pthread_mutex_lock(&current->pwd.mtx);
         switch(current->pwd.ref->stats.st_mode & S_IFMT) {
             case S_IFREG: {
-                //printff("\r[%.*s]",SO_F(current->pwd.ref->content.text));
-                tui_buffer_draw(buffer, panel->layout.preview.rc, 0, 0, 0, current->pwd.ref->content.text);
+                if(current->pwd.ref->signature_id == SO_FILESIG_PNG ||
+                   current->pwd.ref->signature_id == SO_FILESIG_JPEG) {
+                    File_Graphic *gfx = &current->pwd.ref->content.graphic;
+                    if(!tui_point_cmp(gfx->cvt_dim, panel->layout.preview.rc.dim)) {
+                        tui_buffer_draw_subbuf(buffer, panel->layout.preview.rc, &gfx->cvt_buf);
+                    }
+                } else {
+                    //printff("\r[%.*s]",SO_F(current->pwd.ref->content.text));
+                    tui_buffer_draw(buffer, panel->layout.preview.rc, 0, 0, 0, current->pwd.ref->content.text);
+                }
             } break;
             case S_IFDIR: {
                 panel_gaki_render_nav_dir(buffer, &tmp, current, panel, panel->layout.preview);
             } break;
         }
+        pthread_mutex_unlock(&current->pwd.mtx);
     }
 
     /* draw parent */

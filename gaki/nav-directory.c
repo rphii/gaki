@@ -219,26 +219,33 @@ void *nav_directory_async_readreg(Pw *pw, bool *cancel, void *void_task) {
 
     pthread_mutex_lock(&task->nav->pwd.ref->mtx);
     bool loaded = task->nav->pwd.ref->loaded;
-    task->nav->pwd.ref->loaded = true;
+    bool update = false;
 
     So content = SO;
     if(!loaded) {
-        if(nav->pwd.ref->stats.st_size < 0x8000) {
+        if(nav->pwd.ref->signature_id == SO_FILESIG_PNG ||
+           nav->pwd.ref->signature_id == SO_FILESIG_JPEG) {
+            update = file_info_image_thumb(nav->pwd.ref);
+        } else if(nav->pwd.ref->stats.st_size < 0x8000) {
             so_file_read(nav->pwd.ref->path, &content);
             nav->pwd.ref->content.text = content;
         }
     }
 
+    task->nav->pwd.ref->loaded = true;
     /* done */
     pthread_mutex_unlock(&task->nav->pwd.ref->mtx);
 
     pthread_mutex_lock(&task->sync->mtx);
-    bool main_update = nav == task->nav && content.len;
+    bool render = nav == task->nav && content.len;
     pthread_mutex_unlock(&task->sync->mtx);
 
     //tui_sync_main_render(task->sync_m);
-    if(main_update) {
+    if(render) {
         tui_sync_main_render(task->sync_m);
+    }
+    if(update) {
+        tui_sync_main_update(task->sync_m);
     }
 
 exit:
