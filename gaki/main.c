@@ -181,7 +181,12 @@ int main(int argc, char **argv) {
     tui_enter();
 
     So out = SO;
-    Gaki gaki = { .resized = true, .sync_main.update_do = true };
+    Gaki gaki = {
+        .resized = true,
+        .sync_main.update_do = true,
+        .config.filter_prefix = so(" "),
+        .config.search_prefix = so(" "),
+    };
 
     gaki_global_set(&gaki);
 
@@ -230,7 +235,7 @@ int main(int argc, char **argv) {
                 if(gaki.panel_input.visible) {
                     render |= panel_input_input(&gaki.panel_input, &gaki.sync_main, &input, &flush);
                 } else {
-                    render |= panel_gaki_input(&gaki.sync_panel, &gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_input, &gaki.sync_draw, &input, &gaki.panel_input, &flush, &gaki.quit);
+                    render |= panel_gaki_input(&gaki.sync_panel, &gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_input, &gaki.sync_draw, &gaki.config, &input, &gaki.panel_input, &flush, &gaki.quit);
                 }
                 if(flush) continue;
             }
