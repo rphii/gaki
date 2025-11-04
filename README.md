@@ -1,6 +1,6 @@
 # gaki
 
-Minmal TUI directory browser, inspired by `mc`, `ranger`, `yazi` or similar.
+Minimal TUI directory browser, inspired by `mc`, `ranger`, `yazi` or similar.
 
 ## 📦 Install
 ```shell
