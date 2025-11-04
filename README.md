@@ -55,7 +55,8 @@ For e.g. search or filter:
 - help for hotkeys
 - remap hotkeys
 - user defined program when "opening" files
-- multi-select is basically already in the code - it just has no application so far
+- multi-select is basically already in the code
+    - allow custom launch args for when launching with multi-select
 - rename file(s)
 - multiple panels basically already in the code via. tabs, but I do want multi-panels as well
 - other directory sorting methods

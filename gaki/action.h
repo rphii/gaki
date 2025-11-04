@@ -19,6 +19,7 @@ typedef struct Action {
     bool search_clear;
     bool search_next;
     bool search_prev;
+    bool select_toggle;
 } Action;
 
 typedef enum {
