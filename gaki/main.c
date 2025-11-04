@@ -2,6 +2,7 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <time.h>
+#include <limits.h>
 #include <ctype.h>
 #include <pthread.h> 
 #include <rlpw.h> 
@@ -205,10 +206,12 @@ int main(int argc, char **argv) {
 
     if(argc >= 2) {
         /* TODO iterate over i and make tabs/splits */
-        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, so_l(argv[1]));
+        char creal[PATH_MAX];
+        realpath(argv[1], creal);
+        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, so_l(creal));
     } else {
-        char ccwd[4096];
-        getcwd(ccwd, 4096);
+        char ccwd[PATH_MAX];
+        getcwd(ccwd, PATH_MAX);
         nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, so_l(ccwd));
     }
 
