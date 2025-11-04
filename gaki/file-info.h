@@ -1,5 +1,6 @@
 #ifndef FILE_INFOS_H
 
+#include <rlpw.h>
 #include <rlso.h>
 #include <rltui.h>
 #include <sys/stat.h>
@@ -7,6 +8,7 @@
 typedef struct File_Info File_Info;
 typedef struct File_Info *File_Infos;
 typedef struct Gaki_Sync_T_File_Info Gaki_Sync_T_File_Info;
+typedef struct Tui_Sync_Main Tui_Sync_Main;
 
 //VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, BASE);
 //VEC_INCLUDE(File_Infos, file_infos, File_Info, BY_REF, SORT);
@@ -18,18 +20,18 @@ typedef enum {
     FILE_GRAPHIC_KITTY,
 } File_Graphic_List;
 
-typedef struct Gaki_Image {
-    unsigned int w;
-    unsigned int h;
-    unsigned int ch;
+typedef struct File_Image {
+    int w;
+    int h;
+    int ch;
     unsigned char *data;
-} Gaki_Image;
+} File_Image;
 
 typedef struct File_Graphic {
     File_Graphic_List id;
-    Gaki_Image thumb;
-    So cvt_str;
-    Tui_Point cvt_rct;
+    File_Image thumb;
+    Tui_Buffer cvt_buf;
+    Tui_Point cvt_dim;
 } File_Graphic;
 
 typedef enum File_Content_List {
@@ -61,11 +63,14 @@ typedef struct File_Info {
     bool loaded_done;
 } File_Info, *File_Infos;
 
+bool file_info_image_thumb(File_Info *a);
 int file_info_cmp(File_Info *a, File_Info *b);
 void file_info_free(File_Info *a);
 size_t file_info_rel(File_Info *info);
 double file_info_relsize(File_Info *info);
 char *file_info_relcstr(File_Info *info);
+
+void task_file_info_image_cvt_dispatch(Pw *pw, File_Info *info, Tui_Point dim, Tui_Sync_Main *sync_m);
 
 File_Info *file_info_ensure(Gaki_Sync_T_File_Info *sync, So path);
 

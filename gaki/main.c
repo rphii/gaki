@@ -201,7 +201,8 @@ int main(int argc, char **argv) {
     pw_queue(&gaki.pw_draw, pw_queue_render, &gaki);
     pw_dispatch(&gaki.pw_draw);
 
-    pw_init(&gaki.pw_task, 4);
+    long number_of_processors = sysconf(_SC_NPROCESSORS_ONLN);
+    pw_init(&gaki.pw_task, number_of_processors ? number_of_processors : 1);
     pw_dispatch(&gaki.pw_task);
 
     if(argc >= 2) {
