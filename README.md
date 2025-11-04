@@ -34,12 +34,23 @@ meson install -C build
 - `t` create tab
 - `L` next tab
 - `H` previous tab
+- `/` enter search
+- `?` clear search & enter search
+- `f` enter filter
+- `F` clear filter & enter filter
+
+### Text input
+
+For e.g. search or filter:
+
+- Confirm with `enter`
+- Abort with `esc`
 
 ## SOON™
 
+- scroll text preview up/down
+- image preview
 - update directory/files on external change
-- search for file name
-- filter for file name
 - help for hotkeys
 - remap hotkeys
 - user defined program when "opening" files
