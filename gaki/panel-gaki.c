@@ -116,6 +116,17 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
 
     panel_gaki_layout_from_rules(&sync->panel_gaki.layout, &sync->panel_gaki.config, sync->panel_gaki.nav_directory, panel_i);
 
+    /* if invalid file selected */
+    while(sync->panel_gaki.nav_directory) {
+        Nav_Directory *nav = sync->panel_gaki.nav_directory;
+        if(!nav) break;
+        if(!nav->pwd.ref) break;
+        if(!nav->pwd.have_read) break;
+        if(nav->pwd.ref->exists && !S_ISREG(nav->pwd.ref->stats.st_mode)) break;
+        if(!nav->parent) break;
+        sync->panel_gaki.nav_directory = nav->parent;
+    }
+
     Nav_Directory *nav = sync->panel_gaki.nav_directory;
     if(nav && nav->index < array_len(nav->list)) {
         Nav_Directory *nav_sub = array_at(nav->list, nav->index);
@@ -123,6 +134,12 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
             nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav_sub);
         }
     }
+    //if(nav && nav->pwd.ref) {
+    //    usleep(1e5);printff("\rnav->pwd.ref: %p, have_read %u, exists %u", nav->pwd.ref, nav->pwd.have_read, nav->pwd.ref->exists);usleep(1e6);
+    //    if(nav->pwd.have_read && !nav->pwd.ref->exists) {
+    //        sync->panel_gaki.nav_directory = nav->parent;
+    //    }
+    //}
 
     /* read parent directory */
     if(nav && !nav->parent) {
