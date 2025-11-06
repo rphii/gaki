@@ -54,6 +54,134 @@ void x() {
 
 #include <dirent.h>
 
+void nav_directory_select_up(Nav_Directory *nav, size_t n) {
+    if(!nav) return;
+    size_t len_list = array_len(nav->list);
+    if(nav->index >= len_list) nav->index = len_list;
+    if(!nav->index) {
+        nav->index = len_list - 1;
+    } else {
+        --nav->index;
+    }
+    nav_directory_select_any_prev_visible(nav);
+}
+
+void nav_directory_select_down(Nav_Directory *nav, size_t n) {
+    if(!nav) return;
+    ++nav->index;
+    if(nav->index >= array_len(nav->list)) {
+        nav->index = 0;
+    }
+    nav_directory_select_any_next_visible(nav);
+}
+
+void nav_directory_select_at(Nav_Directory *nav, size_t i) {
+    if(!nav) return;
+    size_t len_filter = nav_directory_visible_count(nav);
+    size_t len_all = array_len(nav->list);
+    if(i > len_filter) {
+        nav->index = SIZE_MAX;
+    } else if(len_filter == len_all) {
+        nav->index = i;
+    } else {
+        for(size_t ii = 0, j = 0; j < len_all; ++j) {
+            Nav_Directory *nav_sub = array_at(nav->list, j);
+            //printff("\rfind %zu @ %zu", i,j);
+            if(nav_directory_visible_check(nav_sub, nav->filter.so)) {
+                //printff("\r  found %zu",ii);
+                if(ii++ >= i) {
+                    nav->index = j;
+                    break;
+                }
+            }
+        }
+    }
+    nav_directory_select_any_next_visible(nav);
+}
+
+void nav_directory_select_any_next_visible(Nav_Directory *nav) {
+    if(!nav) return;
+    size_t len_filter = nav_directory_visible_count(nav);
+    size_t len_all = array_len(nav->list);
+    if(len_all == len_filter) return;
+    if(!len_filter) return;
+    for(size_t i = nav->index; i < nav->index + len_all; ++i) {
+        Nav_Directory *nav_sub = array_at(nav->list, i % len_all);
+        if(nav_directory_visible_check(nav_sub, nav->filter.so)) {
+            nav->index = i % len_all;
+            break;
+        }
+    }
+}
+
+void nav_directory_select_any_prev_visible(Nav_Directory *nav) {
+    if(!nav) return;
+    size_t len_filter = nav_directory_visible_count(nav);
+    size_t len_all = array_len(nav->list);
+    //if(len_all == len_filter) return;
+    if(!len_filter) return;
+    for(size_t i = 0; i < len_all; ++i) {
+        size_t j = nav->index >= i ? nav->index - i : len_all + nav->index - i;
+        Nav_Directory *nav_sub = array_at(nav->list, j);
+        if(nav_directory_visible_check(nav_sub, nav->filter.so)) {
+            nav->index = j;
+            break;
+        }
+    }
+}
+
+void nav_directory_offset_center(Nav_Directory *nav, Tui_Point dim) {
+    if(!nav) return;
+    size_t len = nav_directory_visible_count(nav);
+    if(len <= dim.y) {
+        nav->offset = 0;
+    } else {
+        ssize_t y2 = dim.y / 2;
+        if(nav->index >= y2) {
+            if(nav->index < len - y2) {
+                nav->offset = nav->index - y2;
+            } else {
+                nav->offset = len - dim.y;
+            }
+        } else {
+            nav->offset = 0;
+        }
+    }
+}
+
+void nav_directory_search_next(Nav_Directory *nav, size_t index, So search) {
+    if(!nav) return;
+    size_t len = array_len(nav->list);
+    if(!len) return;
+    //printff("\rSEARCH");
+    for(size_t i = 0; i < len; ++i) {
+        size_t j = (i + index) % len;
+        //printff("\r%zu",j);
+        Nav_Directory *nav_sub = array_at(nav->list, j);
+        if(!nav_directory_visible_check(nav_sub, nav->filter.so)) continue;
+        So name = so_get_nodir(nav_sub->pwd.ref->path);
+        if(so_find_sub(name, search, true) < so_len(name)) {
+            nav->index = j;
+            break;
+        }
+    }
+}
+
+void nav_directory_search_prev(Nav_Directory *nav, size_t index, So search) {
+    if(!nav) return;
+    size_t len = array_len(nav->list);
+    if(!len) return;
+    for(size_t i = 0; i < len; ++i) {
+        size_t j = (index >= i ? index - i : len + index - i) % len;
+        Nav_Directory *nav_sub = array_at(nav->list, j);
+        if(!nav_directory_visible_check(nav_sub, nav->filter.so)) continue;
+        So name = so_get_nodir(nav_sub->pwd.ref->path);
+        if(so_find_sub(name, search, true) < so_len(name)) {
+            nav->index = j;
+            break;
+        }
+    }
+}
 
 void nav_directories_sort(Nav_Directories *vec) {
     /* shell sort, https://rosettacode.org/wiki/Sorting_algorithms/Shell_sort */
@@ -91,26 +219,33 @@ void *nav_directory_async_readreg(Pw *pw, bool *cancel, void *void_task) {
 
     pthread_mutex_lock(&task->nav->pwd.ref->mtx);
     bool loaded = task->nav->pwd.ref->loaded;
-    task->nav->pwd.ref->loaded = true;
+    bool update = false;
 
     So content = SO;
     if(!loaded) {
-        if(nav->pwd.ref->stats.st_size < 0x8000) {
+        if(nav->pwd.ref->signature_id == SO_FILESIG_PNG ||
+           nav->pwd.ref->signature_id == SO_FILESIG_JPEG) {
+            update = file_info_image_thumb(nav->pwd.ref);
+        } else if(nav->pwd.ref->stats.st_size < 0x8000) {
             so_file_read(nav->pwd.ref->path, &content);
             nav->pwd.ref->content.text = content;
         }
     }
 
+    task->nav->pwd.ref->loaded = true;
     /* done */
     pthread_mutex_unlock(&task->nav->pwd.ref->mtx);
 
     pthread_mutex_lock(&task->sync->mtx);
-    bool main_update = nav == task->nav && content.len;
+    bool render = nav == task->nav && content.len;
     pthread_mutex_unlock(&task->sync->mtx);
 
     //tui_sync_main_render(task->sync_m);
-    if(main_update) {
+    if(render) {
         tui_sync_main_render(task->sync_m);
+    }
+    if(update) {
+        tui_sync_main_update(task->sync_m);
     }
 
 exit:
@@ -201,17 +336,13 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
     /* done, apply */
     pthread_mutex_lock(&task->sync->mtx);
     Nav_Directory *nav = task->sync->panel_gaki.nav_directory;
-    bool main_update = nav == task->nav;
-    bool main_render = task->nav->parent == nav || task->nav == nav->parent;
+    bool main_update = nav == task->nav || task->nav->parent == nav || task->nav == nav->parent; // have to update, maybe center offset
     task->nav->list = tmp.list;
     task->nav->index = index;
     pthread_mutex_unlock(&task->sync->mtx);
 
     if(main_update) {
-        tui_sync_main_update(task->sync_m);
-    }
-    if(main_render) {
-        tui_sync_main_render(task->sync_m);
+        tui_sync_main_both(task->sync_m);
     }
 
     free(task);
@@ -270,6 +401,9 @@ void nav_directory_dispatch_readany(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_F
         } break;
         default: break;
     }
+    if(!dir->pwd.ref->exists) {
+        dir->pwd.have_read = true;
+    }
 }
 
 void *nav_directory_async_register(Pw *pw, bool *cancel, void *void_task) {
@@ -279,7 +413,7 @@ void *nav_directory_async_register(Pw *pw, bool *cancel, void *void_task) {
     Task_Nav_Directory_Register *task = void_task;
 
     File_Info *info = file_info_ensure(task->sync_t, task->path);
-    ASSERT_ARG(S_ISDIR(info->stats.st_mode));
+    //ASSERT_ARG(S_ISDIR(info->stats.st_mode));
 
     pthread_mutex_lock(&task->sync->mtx);
     if(task->sync->count_register && task->sync->count_register == task->current_register) {
@@ -313,5 +447,27 @@ void nav_directory_dispatch_register(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_
     task->current_register = ++task->sync->count_register;
 
     pw_queue(pw, nav_directory_async_register, task);
+}
+
+bool nav_directory_visible_check(Nav_Directory *nav, So filter) {
+    bool visible = false;
+    if(!nav) return visible;
+    File_Info *info = nav->pwd.ref;
+    if(!info) return visible;
+    if(!so_len(filter)) visible = true;
+    So check = so_get_nodir(info->path);
+    if(so_find_sub(check, filter, true) < so_len(check)) visible = true;
+    return visible;
+}
+
+size_t nav_directory_visible_count(Nav_Directory *nav) {
+    size_t result = 0;
+    if(!nav) return result;
+    size_t len = array_len(nav->list);
+    for(size_t i = 0; i < len; ++i) {
+        Nav_Directory *nav_sub = array_at(nav->list, i);
+        result += nav_directory_visible_check(nav_sub, nav->filter.so);
+    }
+    return result;
 }
 
