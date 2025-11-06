@@ -42,7 +42,7 @@ typedef struct Panel_Gaki {
     //So pwd_current;
 } Panel_Gaki;
 
-void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Panel_Input *panel_i);
+void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Panel_Input *panel_i, double ratio_cell_xy);
 bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Tui_Sync_Input *sync_i, Tui_Sync_Draw *sync_d, Gaki_Config *cfg, Tui_Input *input, Panel_Input *panel_i, bool *flush, bool *quit);
 void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *gaki);
 

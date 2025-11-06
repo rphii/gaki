@@ -110,7 +110,7 @@ void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *
 }
 
 
-void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Panel_Input *panel_i) {
+void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Panel_Input *panel_i, double ratio_cell_xy) {
 
     pthread_mutex_lock(&sync->mtx);
 
@@ -128,15 +128,19 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
     }
 
     Nav_Directory *nav = sync->panel_gaki.nav_directory;
+    for(size_t i = 0; nav && i < array_len(nav->list); ++i) {
+        Nav_Directory *nav_sub = array_at(nav->list, i);
+        if(nav_sub && nav_sub->pwd.ref) {
+            nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav_sub);
+        }
+    }
+
     if(nav && nav->index < array_len(nav->list)) {
         Nav_Directory *current = array_at(nav->list, nav->index);
-        if(current && current->pwd.ref) {
-            nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, current);
-        }
         pthread_mutex_lock(&current->pwd.mtx);
         if(current->pwd.ref->signature_id == SO_FILESIG_PNG ||
            current->pwd.ref->signature_id == SO_FILESIG_JPEG) {
-            task_file_info_image_cvt_dispatch(pw, current->pwd.ref, sync->panel_gaki.layout.preview.rc.dim, sync_m);
+            task_file_info_image_cvt_dispatch(pw, current->pwd.ref, sync->panel_gaki.layout.preview.rc.dim, sync_m, ratio_cell_xy);
         }
         pthread_mutex_unlock(&current->pwd.mtx);
     }
