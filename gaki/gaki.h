@@ -40,6 +40,8 @@ typedef struct Gaki {
 
     Gaki_Sync_T_File_Info sync_t_file_info;
 
+    double aspect_ratio_cell_xy;
+
     Pw pw_main;
     Pw pw_draw;
     Pw pw_task;

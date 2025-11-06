@@ -105,6 +105,7 @@ typedef struct Task_File_Info_Image_Cvt {
     File_Info *info;
     Tui_Point dim;
     Tui_Sync_Main *sync_m;
+    double ratio_xy;
 } Task_File_Info_Image_Cvt;
 
 void *task_file_info_image_cvt_async(Pw *pw, bool *quit, void *void_task) {
@@ -119,7 +120,9 @@ void *task_file_info_image_cvt_async(Pw *pw, bool *quit, void *void_task) {
     tui_buffer_resize(&gfx->cvt_buf, task->dim);
     tui_buffer_clear(&gfx->cvt_buf);
 
+    double ratio_xy = task->ratio_xy ? task->ratio_xy : 1.0;
     Tui_Point dim_rez = task->dim;
+
     dim_rez.y *= 2;
     if(!dim_rez.y || !dim_rez.x) goto quit;
 
@@ -127,10 +130,10 @@ void *task_file_info_image_cvt_async(Pw *pw, bool *quit, void *void_task) {
     File_Image rez = {0};
     rez.ch = thumb->ch;
     rez.w = dim_rez.x;
-    rez.h = round((double)thumb->h / (double)thumb->w * (double)rez.w);
+    rez.h = round((double)thumb->h / (double)thumb->w * (double)rez.w * ratio_xy);
     if(rez.h >= dim_rez.y) {
         rez.h = dim_rez.y;
-        rez.w = round((double)thumb->w / (double)thumb->h * (double)rez.h);
+        rez.w = round((double)thumb->w / (double)thumb->h * (double)rez.h / ratio_xy);
     }
     rez.data = malloc(rez.w * rez.h * rez.ch);
 
@@ -187,7 +190,7 @@ quit:
     return 0;
 }
 
-void task_file_info_image_cvt_dispatch(Pw *pw, File_Info *info, Tui_Point dim, Tui_Sync_Main *sync_m) {
+void task_file_info_image_cvt_dispatch(Pw *pw, File_Info *info, Tui_Point dim, Tui_Sync_Main *sync_m, double ratio_cell_xy) {
     ASSERT_ARG(pw);
     ASSERT_ARG(info);
 
@@ -199,6 +202,7 @@ void task_file_info_image_cvt_dispatch(Pw *pw, File_Info *info, Tui_Point dim, T
     task->info = info;
     task->dim = dim;
     task->sync_m = sync_m;
+    task->ratio_xy = ratio_cell_xy;
     pw_queue(pw, task_file_info_image_cvt_async, task);
     //usleep(1e5);printff("\rqueue..");usleep(1e5);
 }

@@ -77,6 +77,14 @@ void handle_resize(Gaki *gaki) {
         .y = w.ws_row,
     };
 
+    if(w.ws_xpixel && w.ws_ypixel) {
+        gaki->aspect_ratio_cell_xy = 2 * ((double)w.ws_xpixel / (double)dimension.x) / ((double)w.ws_ypixel / (double)dimension.y);
+    } else {
+        gaki->aspect_ratio_cell_xy = 1;
+    }
+    //printff("%u %u %u %u -> %f",w.ws_xpixel,dimension.x,w.ws_ypixel,dimension.y,gaki->aspect_ratio_cell_xy);
+    //exit(1);
+
     Tui_Point dimension_prev = gaki->buffer.dimension;
     if(!tui_point_cmp(dimension_prev, dimension)) {
         gaki->resized = false;
@@ -242,7 +250,7 @@ int main(int argc, char **argv) {
                 }
                 if(flush) continue;
             }
-            panel_gaki_update(&gaki.sync_panel, &gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.panel_input);
+            panel_gaki_update(&gaki.sync_panel, &gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.panel_input, gaki.aspect_ratio_cell_xy);
             panel_input_update(&gaki.panel_input);
 
             pthread_mutex_lock(&gaki.sync_main.mtx);

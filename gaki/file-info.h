@@ -70,7 +70,7 @@ size_t file_info_rel(File_Info *info);
 double file_info_relsize(File_Info *info);
 char *file_info_relcstr(File_Info *info);
 
-void task_file_info_image_cvt_dispatch(Pw *pw, File_Info *info, Tui_Point dim, Tui_Sync_Main *sync_m);
+void task_file_info_image_cvt_dispatch(Pw *pw, File_Info *info, Tui_Point dim, Tui_Sync_Main *sync_m, double ratio_cell_xy);
 
 File_Info *file_info_ensure(Gaki_Sync_T_File_Info *sync, So path);
 
