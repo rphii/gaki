@@ -3,7 +3,9 @@
 #include <rltui.h>
 #include <rlpw.h>
 
+#include "gaki-config.h"
 #include "panel-gaki.h"
+#include "panel-input.h"
 #include "action.h"
 #include "gaki-sync.h"
 
@@ -17,6 +19,8 @@ typedef enum {
 #endif
 
 typedef struct Gaki {
+    Gaki_Config config;
+
     struct timespec t0;
     struct timespec tE;
     size_t frames;
@@ -26,6 +30,8 @@ typedef struct Gaki {
 
     Tui_Screen screen;
     Tui_Buffer buffer;
+
+    Panel_Input panel_input;
 
     Tui_Sync_Main sync_main;
     Tui_Sync_Draw sync_draw;

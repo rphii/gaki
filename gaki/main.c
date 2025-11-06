@@ -2,6 +2,7 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <time.h>
+#include <limits.h>
 #include <ctype.h>
 #include <pthread.h> 
 #include <rlpw.h> 
@@ -67,7 +68,6 @@ void signal_winch(int x) {
 
 void handle_resize(Gaki *gaki) {
     if(!gaki->resized) return;
-    gaki->resized = false;
     
     struct winsize w;
     ioctl(0, TIOCGWINSZ, &w);
@@ -79,6 +79,7 @@ void handle_resize(Gaki *gaki) {
 
     Tui_Point dimension_prev = gaki->buffer.dimension;
     if(!tui_point_cmp(dimension_prev, dimension)) {
+        gaki->resized = false;
         return;
     }
 
@@ -181,7 +182,12 @@ int main(int argc, char **argv) {
     tui_enter();
 
     So out = SO;
-    Gaki gaki = { .resized = true, .sync_main.update_do = true };
+    Gaki gaki = {
+        .resized = true,
+        .sync_main.update_do = true,
+        .config.filter_prefix = so(" "),
+        .config.search_prefix = so(" "),
+    };
 
     gaki_global_set(&gaki);
 
@@ -195,17 +201,19 @@ int main(int argc, char **argv) {
     pw_queue(&gaki.pw_draw, pw_queue_render, &gaki);
     pw_dispatch(&gaki.pw_draw);
 
-    pw_init(&gaki.pw_task, 4);
+    long number_of_processors = sysconf(_SC_NPROCESSORS_ONLN);
+    pw_init(&gaki.pw_task, number_of_processors ? number_of_processors : 1);
     pw_dispatch(&gaki.pw_task);
 
     if(argc >= 2) {
         /* TODO iterate over i and make tabs/splits */
-        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, so_l(argv[1]));
+        char creal[PATH_MAX];
+        realpath(argv[1], creal);
+        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, so_l(creal));
     } else {
-        So pwd = SO;
-        so_env_get(&pwd, so("PWD"));
-        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, pwd);
-        so_free(&pwd);
+        char ccwd[PATH_MAX];
+        getcwd(ccwd, PATH_MAX);
+        nav_directory_dispatch_register(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, so_l(ccwd));
     }
 
     fast_srand(time(0));
@@ -227,10 +235,15 @@ int main(int argc, char **argv) {
             bool flush = false;
             while(!gaki.quit && array_len(gaki.inputs)) {
                 Tui_Input input = array_pop(gaki.inputs);
-                render |= panel_gaki_input(&gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_panel, &gaki.sync_input, &gaki.sync_draw, &input, &flush, &gaki.quit);
+                if(gaki.panel_input.visible) {
+                    render |= panel_input_input(&gaki.panel_input, &gaki.sync_main, &input, &flush);
+                } else {
+                    render |= panel_gaki_input(&gaki.sync_panel, &gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.sync_input, &gaki.sync_draw, &gaki.config, &input, &gaki.panel_input, &flush, &gaki.quit);
+                }
                 if(flush) continue;
             }
-            panel_gaki_update(&gaki.pw_task, &gaki.sync_panel, &gaki.sync_main, &gaki.sync_t_file_info);
+            panel_gaki_update(&gaki.sync_panel, &gaki.pw_task, &gaki.sync_main, &gaki.sync_t_file_info, &gaki.panel_input);
+            panel_input_update(&gaki.panel_input);
 
             pthread_mutex_lock(&gaki.sync_main.mtx);
             ++gaki.sync_main.update_done;
@@ -240,8 +253,9 @@ int main(int argc, char **argv) {
 
         if(gaki.quit) break;
 
+        bool draw_busy = true;
         pthread_mutex_lock(&gaki.sync_draw.mtx);
-        bool draw_busy = gaki.sync_draw.draw_done < gaki.sync_draw.draw_do;
+        draw_busy = gaki.sync_draw.draw_done < gaki.sync_draw.draw_do;
         //printff("\rdraw busy:%u",draw_busy);
         if(draw_busy) {
             ++gaki.sync_draw.draw_skip;
@@ -256,9 +270,13 @@ int main(int argc, char **argv) {
         }
         pthread_mutex_unlock(&gaki.sync_main.mtx);
 
+
         if(render_do && !draw_busy) {
+            gaki.buffer.cursor.id = TUI_CURSOR_NONE;
+
             tui_buffer_clear(&gaki.buffer);
             panel_gaki_render(&gaki.buffer, &gaki.sync_panel);
+            panel_input_render(&gaki.panel_input, &gaki.buffer);
 
 #if 0
             So tmp = SO;
@@ -277,6 +295,7 @@ int main(int argc, char **argv) {
                 tui_screen_resize(&gaki.screen, gaki.buffer.dimension);
             }
             memcpy(gaki.screen.now.cells, gaki.buffer.cells, sizeof(Tui_Cell) * gaki.buffer.dimension.x * gaki.buffer.dimension.y);
+            gaki.screen.now.cursor = gaki.buffer.cursor;
             pthread_cond_signal(&gaki.sync_draw.cond);
             pthread_mutex_unlock(&gaki.sync_draw.mtx);
 

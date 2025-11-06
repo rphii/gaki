@@ -1,10 +1,11 @@
 
 sources = [
-  'main.c',
   'file-info.c',
-  'panel-gaki.c',
-  'nav-directory.c',
   'gaki.c',
+  'main.c',
+  'nav-directory.c',
+  'panel-gaki.c',
+  'panel-input.c',
   ]
 
 cc = meson.get_compiler('c')
