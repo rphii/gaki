@@ -54,7 +54,7 @@ void x() {
 
 #include <dirent.h>
 
-void nav_directory_select_up(Nav_Directory *nav, size_t n) {
+void nav_directory_select_up(Nav_Directory *nav, bool show_dots, size_t n) {
     if(!nav) return;
     size_t len_list = array_len(nav->list);
     if(nav->index >= len_list) nav->index = len_list;
@@ -63,21 +63,21 @@ void nav_directory_select_up(Nav_Directory *nav, size_t n) {
     } else {
         --nav->index;
     }
-    nav_directory_select_any_prev_visible(nav);
+    nav_directory_select_any_prev_visible(nav, show_dots);
 }
 
-void nav_directory_select_down(Nav_Directory *nav, size_t n) {
+void nav_directory_select_down(Nav_Directory *nav, bool show_dots, size_t n) {
     if(!nav) return;
     ++nav->index;
     if(nav->index >= array_len(nav->list)) {
         nav->index = 0;
     }
-    nav_directory_select_any_next_visible(nav);
+    nav_directory_select_any_next_visible(nav, show_dots);
 }
 
-void nav_directory_select_at(Nav_Directory *nav, size_t i) {
+void nav_directory_select_at(Nav_Directory *nav, bool show_dots, size_t i) {
     if(!nav) return;
-    size_t len_filter = nav_directory_visible_count(nav);
+    size_t len_filter = nav_directory_visible_count(nav, show_dots);
     size_t len_all = array_len(nav->list);
     if(i > len_filter) {
         nav->index = SIZE_MAX;
@@ -87,7 +87,7 @@ void nav_directory_select_at(Nav_Directory *nav, size_t i) {
         for(size_t ii = 0, j = 0; j < len_all; ++j) {
             Nav_Directory *nav_sub = array_at(nav->list, j);
             //printff("\rfind %zu @ %zu", i,j);
-            if(nav_directory_visible_check(nav_sub, nav->filter.so)) {
+            if(nav_directory_visible_check(nav_sub, show_dots, nav->filter.so)) {
                 //printff("\r  found %zu",ii);
                 if(ii++ >= i) {
                     nav->index = j;
@@ -96,43 +96,43 @@ void nav_directory_select_at(Nav_Directory *nav, size_t i) {
             }
         }
     }
-    nav_directory_select_any_next_visible(nav);
+    nav_directory_select_any_next_visible(nav, show_dots);
 }
 
-void nav_directory_select_any_next_visible(Nav_Directory *nav) {
+void nav_directory_select_any_next_visible(Nav_Directory *nav, bool show_dots) {
     if(!nav) return;
-    size_t len_filter = nav_directory_visible_count(nav);
+    size_t len_filter = nav_directory_visible_count(nav, show_dots);
     size_t len_all = array_len(nav->list);
     if(len_all == len_filter) return;
     if(!len_filter) return;
     for(size_t i = nav->index; i < nav->index + len_all; ++i) {
         Nav_Directory *nav_sub = array_at(nav->list, i % len_all);
-        if(nav_directory_visible_check(nav_sub, nav->filter.so)) {
+        if(nav_directory_visible_check(nav_sub, show_dots, nav->filter.so)) {
             nav->index = i % len_all;
             break;
         }
     }
 }
 
-void nav_directory_select_any_prev_visible(Nav_Directory *nav) {
+void nav_directory_select_any_prev_visible(Nav_Directory *nav, bool show_dots) {
     if(!nav) return;
-    size_t len_filter = nav_directory_visible_count(nav);
+    size_t len_filter = nav_directory_visible_count(nav, show_dots);
     size_t len_all = array_len(nav->list);
     //if(len_all == len_filter) return;
     if(!len_filter) return;
     for(size_t i = 0; i < len_all; ++i) {
         size_t j = nav->index >= i ? nav->index - i : len_all + nav->index - i;
         Nav_Directory *nav_sub = array_at(nav->list, j);
-        if(nav_directory_visible_check(nav_sub, nav->filter.so)) {
+        if(nav_directory_visible_check(nav_sub, show_dots, nav->filter.so)) {
             nav->index = j;
             break;
         }
     }
 }
 
-void nav_directory_offset_center(Nav_Directory *nav, Tui_Point dim) {
+void nav_directory_offset_center(Nav_Directory *nav, bool show_dots, Tui_Point dim) {
     if(!nav) return;
-    size_t len = nav_directory_visible_count(nav);
+    size_t len = nav_directory_visible_count(nav, show_dots);
     if(len <= dim.y) {
         nav->offset = 0;
     } else {
@@ -149,7 +149,7 @@ void nav_directory_offset_center(Nav_Directory *nav, Tui_Point dim) {
     }
 }
 
-void nav_directory_search_next(Nav_Directory *nav, size_t index, So search) {
+void nav_directory_search_next(Nav_Directory *nav, bool show_dots, size_t index, So search) {
     if(!nav) return;
     size_t len = array_len(nav->list);
     if(!len) return;
@@ -158,7 +158,7 @@ void nav_directory_search_next(Nav_Directory *nav, size_t index, So search) {
         size_t j = (i + index) % len;
         //printff("\r%zu",j);
         Nav_Directory *nav_sub = array_at(nav->list, j);
-        if(!nav_directory_visible_check(nav_sub, nav->filter.so)) continue;
+        if(!nav_directory_visible_check(nav_sub, show_dots, nav->filter.so)) continue;
         So name = so_get_nodir(nav_sub->pwd.ref->path);
         if(so_find_sub(name, search, true) < so_len(name)) {
             nav->index = j;
@@ -167,14 +167,14 @@ void nav_directory_search_next(Nav_Directory *nav, size_t index, So search) {
     }
 }
 
-void nav_directory_search_prev(Nav_Directory *nav, size_t index, So search) {
+void nav_directory_search_prev(Nav_Directory *nav, bool show_dots, size_t index, So search) {
     if(!nav) return;
     size_t len = array_len(nav->list);
     if(!len) return;
     for(size_t i = 0; i < len; ++i) {
         size_t j = (index >= i ? index - i : len + index - i) % len;
         Nav_Directory *nav_sub = array_at(nav->list, j);
-        if(!nav_directory_visible_check(nav_sub, nav->filter.so)) continue;
+        if(!nav_directory_visible_check(nav_sub, show_dots, nav->filter.so)) continue;
         So name = so_get_nodir(nav_sub->pwd.ref->path);
         if(so_find_sub(name, search, true) < so_len(name)) {
             nav->index = j;
@@ -284,9 +284,10 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
         if(d) {
             So search = SO;
             while((dir = readdir(d)) != NULL) {
-                if(dir->d_name[0] == '.') continue;
+                So dirname = so_l(dir->d_name);
+                if(!so_cmp(dirname, so(".")) || !so_cmp(dirname, so(".."))) continue;
                 so_clear(&search);
-                so_path_join(&search, so_ensure_dir(path), so_l(dir->d_name));
+                so_path_join(&search, so_ensure_dir(path), dirname);
                 File_Info *info = file_info_ensure(task->sync_t, search);
                 array_push(task->nav->pwd.ref->content.files, info);
             }
@@ -449,7 +450,7 @@ void nav_directory_dispatch_register(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_
     pw_queue(pw, nav_directory_async_register, task);
 }
 
-bool nav_directory_visible_check(Nav_Directory *nav, So filter) {
+bool nav_directory_visible_check(Nav_Directory *nav, bool show_dots, So filter) {
     bool visible = false;
     if(!nav) return visible;
     File_Info *info = nav->pwd.ref;
@@ -457,16 +458,17 @@ bool nav_directory_visible_check(Nav_Directory *nav, So filter) {
     if(!so_len(filter)) visible = true;
     So check = so_get_nodir(info->path);
     if(so_find_sub(check, filter, true) < so_len(check)) visible = true;
+    if(!show_dots && so_at0(check) == '.') visible = false;
     return visible;
 }
 
-size_t nav_directory_visible_count(Nav_Directory *nav) {
+size_t nav_directory_visible_count(Nav_Directory *nav, bool show_dots) {
     size_t result = 0;
     if(!nav) return result;
     size_t len = array_len(nav->list);
     for(size_t i = 0; i < len; ++i) {
         Nav_Directory *nav_sub = array_at(nav->list, i);
-        result += nav_directory_visible_check(nav_sub, nav->filter.so);
+        result += nav_directory_visible_check(nav_sub, show_dots, nav->filter.so);
     }
     return result;
 }

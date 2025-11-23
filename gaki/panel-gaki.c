@@ -167,20 +167,20 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
     }
     
     /* make sure we still have something selected even if filtering */
-    nav_directory_select_any_next_visible(nav);
+    nav_directory_select_any_next_visible(nav, sync->panel_gaki.config.show_dots);
 
     /* put all indices into frame */
-    nav_directory_offset_center(nav, sync->panel_gaki.layout.files.rc.dim);
+    nav_directory_offset_center(nav, sync->panel_gaki.config.show_dots, sync->panel_gaki.layout.files.rc.dim);
     if(nav && nav->parent) {
-        nav_directory_offset_center(nav->parent, sync->panel_gaki.layout.parent.rc.dim);
+        nav_directory_offset_center(nav->parent, sync->panel_gaki.config.show_dots, sync->panel_gaki.layout.parent.rc.dim);
     }
     if(nav && nav->index < array_len(nav->list)) {
-        nav_directory_offset_center(array_at(nav->list, nav->index), sync->panel_gaki.layout.preview.rc.dim);
+        nav_directory_offset_center(array_at(nav->list, nav->index), sync->panel_gaki.config.show_dots, sync->panel_gaki.layout.preview.rc.dim);
     }
 
     if(panel_i->visible && (panel_i->config.rc == &sync->panel_gaki.layout.files.rc_search)) {
         if(nav && so_len(nav->search.so)) {
-            nav_directory_search_next(nav, nav->index, nav->search.so);
+            nav_directory_search_next(nav, nav->index, sync->panel_gaki.config.show_dots, nav->search.so);
         }
     }
 
@@ -213,9 +213,15 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
             case 'n': ac.search_next = true; break;
             case 'N': ac.search_prev = true; break;
             case 'v': ac.select_toggle = true; break;
+            case '.': ac.dot_toggle = true; break;
             //case '/': gaki->ac. = 1; break;
             default: break;
         }
+    }
+
+    if(ac.dot_toggle) {
+        sync->panel_gaki.config.show_dots ^= true;
+        any = true;
     }
 
     if(ac.filter || ac.filter_clear) {
@@ -266,7 +272,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         if(nav && input->mouse.l.down) {
             if(tui_rect_encloses_point(sync->panel_gaki.layout.files.rc, input->mouse.pos)) {
                 Tui_Point pt = tui_rect_project_point(sync->panel_gaki.layout.files.rc, input->mouse.pos);
-                nav_directory_select_at(nav, pt.y + nav->offset);
+                nav_directory_select_at(nav, sync->panel_gaki.config.show_dots, pt.y + nav->offset);
                 //nav->index = pt.y + nav->offset;
                 any = true;
             }
@@ -277,7 +283,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                 if(nav->parent) {
                     Nav_Directory *replace = nav->parent;
                     if(pt.y + replace->offset < array_len(replace->list)) {
-                        nav_directory_select_at(replace, pt.y + nav->offset);
+                        nav_directory_select_at(replace, sync->panel_gaki.config.show_dots, pt.y + nav->offset);
                     }
                     sync->panel_gaki.nav_directory = replace;
                     any = true;
@@ -290,7 +296,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                     switch(replace->pwd.ref->stats.st_mode & S_IFMT) {
                         case S_IFDIR: {
                             if(pt.y + replace->offset < array_len(replace->list)) {
-                                nav_directory_select_at(replace, pt.y + nav->offset);
+                                nav_directory_select_at(replace, sync->panel_gaki.config.show_dots, pt.y + nav->offset);
                             }
                             sync->panel_gaki.nav_directory = replace;
                             any = true;
@@ -313,18 +319,18 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         // }
     }
 
-    bool any_shown = nav_directory_visible_count(nav);
+    bool any_shown = nav_directory_visible_count(nav, sync->panel_gaki.config.show_dots);
     if(any_shown) {
 
         if(so_len(nav->search.so)) {
             if(ac.search_next) {
                 size_t next = nav->index + 1 < array_len(nav->list) ? nav->index + 1 : 0;
-                nav_directory_search_next(nav, next, nav->search.so);
+                nav_directory_search_next(nav, sync->panel_gaki.config.show_dots, next, nav->search.so);
                 any = true;
             }
             if(ac.search_prev) {
                 size_t prev = nav->index ? nav->index - 1 : array_len(nav->list) - 1;
-                nav_directory_search_prev(nav, prev, nav->search.so);
+                nav_directory_search_prev(nav, sync->panel_gaki.config.show_dots, prev, nav->search.so);
                 any = true;
             }
         }
@@ -336,12 +342,12 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         }
 
         if(ac.select_up) {
-            nav_directory_select_up(sync->panel_gaki.nav_directory, ac.select_up);
+            nav_directory_select_up(sync->panel_gaki.nav_directory, sync->panel_gaki.config.show_dots, ac.select_up);
             any = true;
         }
 
         if(ac.select_down) {
-            nav_directory_select_down(sync->panel_gaki.nav_directory, ac.select_down);
+            nav_directory_select_down(sync->panel_gaki.nav_directory, sync->panel_gaki.config.show_dots, ac.select_down);
             any = true;
         }
 
@@ -553,7 +559,7 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
     for(size_t i = nav->offset; i < list_len; ++i) {
         if(rc.anc.y >= buffer->dimension.y) break;
         Nav_Directory *nav_sub = array_at(nav->list, i);
-        if(!nav_directory_visible_check(nav_sub, nav->filter.so)) continue;
+        if(!nav_directory_visible_check(nav_sub, panel->config.show_dots, nav->filter.so)) continue;
         tbc.fg = (nav->index == i) ? &dir_fg : 0;
         tbc.bg = (nav->index == i) ? &dir_bg : 0;
         //tbc.fx = (nav_sub->pwd.selected) ? &sel_fx : 0;
@@ -576,7 +582,8 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
                 tbc.fg = (nav->index == i) ? &search_fg2 : &search_fg;
 
                 so_clear(tmp);
-                so_extend(tmp, nav->search.so);
+                so_extend(tmp, so_sub(name, nfind, nfind + so_len(nav->search.so)));
+                //so_extend(tmp, nav->search.so);
                 tui_buffer_draw_cache(buffer, &tbc, *tmp);
                 //printff("\r2 %u,%u",tbc.pt.x,tbc.pt.y);
 
@@ -637,7 +644,7 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     Nav_File_Info *pwd = &nav->pwd;
     if(!pwd->ref) goto exit;
 
-    bool any_shown = nav_directory_visible_count(nav);
+    bool any_shown = nav_directory_visible_count(nav, sync->panel_gaki.config.show_dots);
     panel_gaki_render_nav_dir(buffer, &tmp, nav, panel, panel->layout.files);
 
     /* draw current dir/file/type */
