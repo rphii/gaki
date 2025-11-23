@@ -26,6 +26,9 @@ void nav_directory_layout_from_rules(Nav_Directory_Layout *layout, Tui_Rect rc, 
     ASSERT_ARG(layout);
     if(!nav) return;
 
+    Panel_Input dummy = {0};
+    if(!panel_i) panel_i = &dummy;
+
     layout->rc = rc;
 
     /* filter */
@@ -63,7 +66,7 @@ void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *
     unsigned int w_files, w_parent, w_preview, h_bar = 1;
     panel_gaki_layout_get_ratio_widths(config, &w_files, &w_parent, &w_preview);
 
-    /* make space for bar */
+    /* make space for top bar */
     layout->rc_pwd.dim.y = h_bar;
     rc_files.dim.y -= h_bar;
     rc_files.anc.y += h_bar;
@@ -102,9 +105,9 @@ void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *
 
     nav_directory_layout_from_rules(&layout->files, rc_files, nav, panel_i);
     if(nav) {
-        nav_directory_layout_from_rules(&layout->parent, rc_parent, nav->parent, panel_i);
+        nav_directory_layout_from_rules(&layout->parent, rc_parent, nav->parent, 0);
         if(nav->index < array_len(nav->list)) {
-            nav_directory_layout_from_rules(&layout->preview, rc_preview, array_at(nav->list, nav->index), panel_i);
+            nav_directory_layout_from_rules(&layout->preview, rc_preview, array_at(nav->list, nav->index), 0);
         }
     }
 }
@@ -169,10 +172,10 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
     /* put all indices into frame */
     nav_directory_offset_center(nav, sync->panel_gaki.layout.files.rc.dim);
     if(nav && nav->parent) {
-        nav_directory_offset_center(nav->parent, sync->panel_gaki.layout.files.rc.dim);
+        nav_directory_offset_center(nav->parent, sync->panel_gaki.layout.parent.rc.dim);
     }
     if(nav && nav->index < array_len(nav->list)) {
-        nav_directory_offset_center(array_at(nav->list, nav->index), sync->panel_gaki.layout.files.rc.dim);
+        nav_directory_offset_center(array_at(nav->list, nav->index), sync->panel_gaki.layout.preview.rc.dim);
     }
 
     if(panel_i->visible && (panel_i->config.rc == &sync->panel_gaki.layout.files.rc_search)) {
@@ -203,10 +206,10 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
             case 'L': ac.tab_next = true; break;
             case 'H': ac.tab_prev = true; break;
             case 't': ac.tab_new = true; break;
-            case 'f': ac.filter = true; break;
-            case 'F': ac.filter_clear = true; break;
-            case '/': ac.search = true; break;
-            case '?': ac.search_clear = true; break;
+            case 'F': ac.filter = true; break;
+            case 'f': ac.filter_clear = true; break;
+            case '?': ac.search = true; break;
+            case '/': ac.search_clear = true; break;
             case 'n': ac.search_next = true; break;
             case 'N': ac.search_prev = true; break;
             case 'v': ac.select_toggle = true; break;

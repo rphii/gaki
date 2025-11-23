@@ -25,17 +25,9 @@ typedef struct Gaki {
     struct timespec tE;
     size_t frames;
 
-    Tui_Input_Gen input_gen;
-    Tui_Inputs inputs;
-
-    Tui_Screen screen;
-    Tui_Buffer buffer;
-
     Panel_Input panel_input;
 
-    Tui_Sync_Main sync_main;
-    Tui_Sync_Draw sync_draw;
-    Tui_Sync_Input sync_input;
+    Tui_Sync sync;
     Gaki_Sync_Panel sync_panel;
 
     Gaki_Sync_T_File_Info sync_t_file_info;
@@ -52,10 +44,7 @@ typedef struct Gaki {
 
 } Gaki;
 
-Gaki *gaki_global_get(void);
-void gaki_global_set(Gaki *gaki);
 void gaki_free(Gaki *gaki);
-void gaki_update(Gaki *gaki);
 
 #define GAKI_H
 #endif
