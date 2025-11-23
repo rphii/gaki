@@ -391,6 +391,7 @@ void nav_directory_dispatch_readany(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_F
     ASSERT_ARG(sync_t);
     ASSERT_ARG(sync);
     ASSERT_ARG(dir);
+
     if(!dir->pwd.ref) return;
     if(dir->pwd.have_read) return;
     switch(dir->pwd.ref->stats.st_mode & S_IFMT) {
