@@ -35,10 +35,11 @@ meson install -C build
 - `t` create tab
 - `L` next tab
 - `H` previous tab
-- `/` enter search
-- `?` clear search & enter search
-- `f` enter filter
-- `F` clear filter & enter filter
+- `/` clear search & enter search
+- `?` enter search
+- `f` clear filter & enter filter
+- `F` enter filter
+- `.` toggle dot file visibility
 
 ### Text input
 
