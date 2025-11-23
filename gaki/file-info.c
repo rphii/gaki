@@ -87,7 +87,9 @@ File_Info *file_info_ensure(Gaki_Sync_T_File_Info *sync, So path) {
         char *cpath = so_dup(info_new.path);
         info_new.exists = !stat(cpath, &info_new.stats);
         free(cpath);
-        so_filesig(path, &info_new.signature_unsure, &info_new.signature_id);
+        if(S_ISREG(info_new.stats.st_mode)) {
+            so_filesig(path, &info_new.signature_unsure, &info_new.signature_id);
+        }
         T_File_InfoKV *kv = t_file_info_once(&sync->t_file_info, info_new.path, &info_new);
         if(!kv) {
             usleep(1e5);
