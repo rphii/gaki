@@ -5,8 +5,7 @@
 #include <limits.h>
 #include <ctype.h>
 #include <pthread.h> 
-#include <rlpw.h> 
-#include <rlwcwidth.h>
+#include <rlpw.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <unistd.h> 

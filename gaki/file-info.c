@@ -205,7 +205,7 @@ void task_file_info_image_cvt_dispatch(Pw *pw, File_Info *info, Tui_Point dim, T
     task->dim = dim;
     task->sync_m = sync_m;
     task->ratio_xy = ratio_cell_xy;
-    pw_queue(pw, task_file_info_image_cvt_async, task);
+    pw_queue_front(pw, task_file_info_image_cvt_async, task);
     //usleep(1e5);printff("\rqueue..");usleep(1e5);
 }
 
