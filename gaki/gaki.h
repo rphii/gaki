@@ -27,6 +27,7 @@ typedef struct Gaki {
 
     Panel_Input panel_input;
 
+    struct Tui_Core *tui;
     Tui_Sync sync;
     Gaki_Sync_Panel sync_panel;
 
