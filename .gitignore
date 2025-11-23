@@ -13,5 +13,6 @@ build
 *.cache
 *_old
 subprojects/*
+!subprojects/.gitignore
 !subprojects/*.wrap
 
