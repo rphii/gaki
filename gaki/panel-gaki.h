@@ -31,6 +31,7 @@ typedef struct Panel_Gaki_Config {
     unsigned int ratio_files;
     unsigned int ratio_parent;
     unsigned int ratio_preview;
+    bool show_dots;
 } Panel_Gaki_Config;
 
 typedef struct Panel_Gaki {
