@@ -57,7 +57,7 @@ struct timespec timespec_add_timeval(struct timespec a, struct timeval b) {
     return result;
 }
 
-void handle_resize(struct Tui_Core *tui, Tui_Point dimension, Tui_Point pixels, void *void_gaki) {
+void handle_resize(Tui_Point dimension, Tui_Point pixels, void *void_gaki) {
     Gaki *gaki = void_gaki;
 
     if(pixels.x && pixels.y) {
@@ -69,10 +69,10 @@ void handle_resize(struct Tui_Core *tui, Tui_Point dimension, Tui_Point pixels, 
     gaki->sync_panel.panel_gaki.config.rc = (Tui_Rect){ .dim = dimension };
 }
 
-bool gaki_update(struct Tui_Core *tui, void *user) {
+bool gaki_update(void *user) {
     Gaki *gaki = user;
     if(gaki->quit) {
-        tui_core_quit(tui);
+        tui_core_quit(gaki->tui);
         return false;
     }
     bool render = true;
@@ -81,7 +81,7 @@ bool gaki_update(struct Tui_Core *tui, void *user) {
     return render;
 }
 
-bool gaki_input(struct Tui_Core *tui, Tui_Input *input, bool *flush, void *user) {
+bool gaki_input(Tui_Input *input, bool *flush, void *user) {
     Gaki *gaki = user;
     bool render = false;
     if(gaki->panel_input.visible) {
@@ -92,7 +92,7 @@ bool gaki_input(struct Tui_Core *tui, Tui_Input *input, bool *flush, void *user)
     return render;
 }
 
-void gaki_render(struct Tui_Core *tui, Tui_Buffer *buffer, void *user) {
+void gaki_render(Tui_Buffer *buffer, void *user) {
     Gaki *gaki = user;
     panel_gaki_render(buffer, &gaki->sync_panel);
     panel_input_render(&gaki->panel_input, buffer);
@@ -101,7 +101,6 @@ void gaki_render(struct Tui_Core *tui, Tui_Buffer *buffer, void *user) {
 
 int main(int argc, char **argv) {
 
-    struct Tui_Core *core = tui_core_new();
     Tui_Core_Callbacks callbacks = {
         .input = gaki_input,
         .render = gaki_render,
@@ -114,6 +113,7 @@ int main(int argc, char **argv) {
         .resized = true,
         .config.filter_prefix = so(" "),
         .config.search_prefix = so(" "),
+        .tui = tui_core_new(),
     };
 
     long number_of_processors = sysconf(_SC_NPROCESSORS_ONLN);
@@ -132,9 +132,9 @@ int main(int argc, char **argv) {
     }
 
     tui_enter();
-    tui_core_init(core, &callbacks, &gaki.sync, &gaki);
-    while(tui_core_loop(core)) {};
-    tui_core_free(core);
+    tui_core_init(gaki.tui, &callbacks, &gaki.sync, &gaki);
+    while(tui_core_loop(gaki.tui)) {};
+    tui_core_free(gaki.tui);
     tui_exit();
 
     clock_gettime(CLOCK_REALTIME, &gaki.tE);
