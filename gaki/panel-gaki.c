@@ -295,7 +295,6 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                 if(nav->index < array_len(nav->list)) {
                     Nav_Directory *replace = array_at(nav->list, nav->index);
                     switch(replace->pwd.ref->stats.st_mode & S_IFMT) {
-                        case S_IFLNK:
                         case S_IFDIR: {
                             if(pt.y + replace->offset < array_len(replace->list)) {
                                 nav_directory_select_at(replace, sync->panel_gaki.config.show_dots, pt.y + nav->offset);
@@ -359,7 +358,6 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                 nav = array_at(nav->list, nav->index);
             }
             switch(nav->pwd.ref->stats.st_mode & S_IFMT) {
-                case S_IFLNK:
                 case S_IFDIR: {
                     sync->panel_gaki.nav_directory = nav;
                     any = true;
@@ -565,6 +563,7 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
         if(rc.anc.y >= buffer->dimension.y) break;
         Nav_Directory *nav_sub = array_at(nav->list, i);
         if(!nav_directory_visible_check(nav_sub, panel->config.show_dots, nav->filter.so)) continue;
+        So name = so_get_nodir(nav_sub->pwd.ref->path);
 
         Tui_Color default_fg = { .type = TUI_COLOR_8, .col8 = 7 };
         Tui_Color default_bg = { .type = TUI_COLOR_8, .col8 = 0 };
@@ -661,17 +660,27 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
                 } break;
             }
         } else {
+            So ext = so_get_ext(name);
             switch(nav_sub->pwd.ref->stats.st_mode & S_IFMT) {
                 case S_IFREG: {
-                    icon = "󰈤 ";
+                    if(!so_cmp(ext, so(".sh"))) {
+                        icon = "󰯃 ";
+                    } else if(!so_cmp(ext, so(".conf"))) {
+                        icon = " ";
+                    } else {
+                        icon = "󰈤 ";
+                    }
                 } break;
                 case S_IFDIR: {
-                    icon = (nav->index == i) ? "󰝰 " : "󰉋 ";
-                    default_fg.type = TUI_COLOR_8;
-                    default_fg.col8 = 4;
-                } break;
-                case S_IFLNK: {
-                    icon = " ";
+                    if(nav_sub->pwd.ref->lnk.len) {
+                        icon = " ";
+                    } else {
+                        if(!so_cmp(name, so("Downloads"))) {
+                            icon = "󰇚 ";
+                        } else {
+                            icon = (nav->index == i) ? "󰝰 " : "󰉋 ";
+                        }
+                    }
                     default_fg.type = TUI_COLOR_8;
                     default_fg.col8 = 4;
                 } break;
@@ -693,7 +702,6 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
         tui_buffer_draw_cache(buffer, &tbc, *tmp);
 
         so_clear(tmp);
-        So name = so_get_nodir(nav_sub->pwd.ref->path);
         if(so_len(nav->search.so)) {
             size_t nfind = so_find_sub(name, nav->search.so, true);
 
@@ -736,6 +744,9 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
         } else {
             so_fmt(tmp, "%.*s", SO_F(name));
             tbc.fill = true;
+        }
+        if(nav_sub->pwd.ref->lnk.len) {
+            so_fmt(tmp, " -> %.*s", SO_F(nav_sub->pwd.ref->lnk));
         }
         ASSERT_ARG(tbc.fill);
         tui_buffer_draw_cache(buffer, &tbc, *tmp);
@@ -789,7 +800,6 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     if(any_shown && current && nav->pwd.ref) {
 
         switch(current->pwd.ref->stats.st_mode & S_IFMT) {
-            case S_IFLNK: { bar_bg.col8 = 4; } break;
             case S_IFDIR: { bar_bg.col8 = 4; } break;
             case S_IFREG: { bar_bg.col8 = 5; } break;
             default: break;
@@ -801,9 +811,13 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
 
         so_clear(&tmp);
         Tui_Rect rc_mode = panel->layout.rc_pwd;
+        if(current->pwd.ref->lnk.len) {
+            so_fmt(&tmp, "->");
+        }
         switch(current->pwd.ref->stats.st_mode & S_IFMT) {
-            case S_IFLNK: { so_fmt(&tmp, "[LNK]"); } break;
-            case S_IFDIR: { so_fmt(&tmp, "[DIR]"); } break;
+            case S_IFDIR: {
+                so_fmt(&tmp, "[DIR]");
+            } break;
             case S_IFREG: {
                 so_fmt(&tmp, "[FILE:");
                 so_filesig_fmt(&tmp, current->pwd.ref->signature_id);
@@ -838,7 +852,6 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
                     tui_buffer_draw(buffer, panel->layout.preview.rc, 0, 0, 0, current->pwd.ref->content.text);
                 }
             } break;
-            case S_IFLNK:
             case S_IFDIR: {
                 panel_gaki_render_nav_dir(buffer, &tmp, current, panel, panel->layout.preview);
             } break;
