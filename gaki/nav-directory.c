@@ -77,7 +77,7 @@ void nav_directory_select_down(Nav_Directory *nav, bool show_dots, size_t n) {
 
 void nav_directory_select_at(Nav_Directory *nav, bool show_dots, size_t i) {
     if(!nav) return;
-    size_t len_filter = nav_directory_visible_count(nav, show_dots);
+    size_t len_filter = nav_directory_visible_count(nav, show_dots, 0);
     size_t len_all = array_len(nav->list);
     if(i > len_filter) {
         nav->index = SIZE_MAX;
@@ -101,7 +101,7 @@ void nav_directory_select_at(Nav_Directory *nav, bool show_dots, size_t i) {
 
 void nav_directory_select_any_next_visible(Nav_Directory *nav, bool show_dots) {
     if(!nav) return;
-    size_t len_filter = nav_directory_visible_count(nav, show_dots);
+    size_t len_filter = nav_directory_visible_count(nav, show_dots, 0);
     size_t len_all = array_len(nav->list);
     if(len_all == len_filter) return;
     if(!len_filter) return;
@@ -116,7 +116,7 @@ void nav_directory_select_any_next_visible(Nav_Directory *nav, bool show_dots) {
 
 void nav_directory_select_any_prev_visible(Nav_Directory *nav, bool show_dots) {
     if(!nav) return;
-    size_t len_filter = nav_directory_visible_count(nav, show_dots);
+    size_t len_filter = nav_directory_visible_count(nav, show_dots, 0);
     size_t len_all = array_len(nav->list);
     //if(len_all == len_filter) return;
     if(!len_filter) return;
@@ -132,19 +132,22 @@ void nav_directory_select_any_prev_visible(Nav_Directory *nav, bool show_dots) {
 
 void nav_directory_offset_center(Nav_Directory *nav, bool show_dots, Tui_Point dim) {
     if(!nav) return;
-    size_t len = nav_directory_visible_count(nav, show_dots);
-    if(len <= dim.y) {
+    size_t index = 0;
+    size_t len_vis = nav_directory_visible_count(nav, show_dots, &index);
+    size_t len = array_len(nav->list);
+    if(len_vis <= dim.y) {
         nav->offset = 0;
     } else {
         ssize_t y2 = dim.y / 2;
-        if(nav->index >= y2) {
-            if(nav->index < len - y2) {
-                nav->offset = nav->index - y2;
-            } else {
-                nav->offset = len - dim.y;
-            }
-        } else {
+        if(index <= y2) {
+            /* index is at top of list */
             nav->offset = 0;
+        } else if(index + y2 >= len_vis) {
+            /* index is at top bottom of list */
+            nav->offset = len - dim.y;
+        } else {
+            /* index is in the middle of the list */
+            nav->offset = nav->index - y2;
         }
     }
 }
@@ -395,6 +398,7 @@ void nav_directory_dispatch_readany(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_F
     if(!dir->pwd.ref) return;
     if(dir->pwd.have_read) return;
     switch(dir->pwd.ref->stats.st_mode & S_IFMT) {
+        case S_IFLNK:
         case S_IFDIR: {
             nav_directory_dispatch_readdir(pw, sync_m, sync_t, sync, dir, 0);
         } break;
@@ -458,17 +462,18 @@ bool nav_directory_visible_check(Nav_Directory *nav, bool show_dots, So filter) 
     if(!info) return visible;
     if(!so_len(filter)) visible = true;
     So check = so_get_nodir(info->path);
+    if(!show_dots && so_at0(check) == '.') return false;
     if(so_find_sub(check, filter, true) < so_len(check)) visible = true;
-    if(!show_dots && so_at0(check) == '.') visible = false;
     return visible;
 }
 
-size_t nav_directory_visible_count(Nav_Directory *nav, bool show_dots) {
+size_t nav_directory_visible_count(Nav_Directory *nav, bool show_dots, size_t *selected_index) {
     size_t result = 0;
     if(!nav) return result;
     size_t len = array_len(nav->list);
     for(size_t i = 0; i < len; ++i) {
         Nav_Directory *nav_sub = array_at(nav->list, i);
+        if(selected_index && i == nav->index) *selected_index = result;
         result += nav_directory_visible_check(nav_sub, show_dots, nav->filter.so);
     }
     return result;

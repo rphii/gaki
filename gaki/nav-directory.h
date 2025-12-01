@@ -35,7 +35,7 @@ void nav_directory_dispatch_readany(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_F
 void nav_directory_dispatch_register(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, So path);
 
 bool nav_directory_visible_check(Nav_Directory *nav, bool show_dots, So filter);
-size_t nav_directory_visible_count(Nav_Directory *nav, bool show_dots);
+size_t nav_directory_visible_count(Nav_Directory *nav, bool show_dots, size_t *selected_index);
 
 #define NAV_DIRECTORY
 #endif
