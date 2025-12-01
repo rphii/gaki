@@ -582,8 +582,10 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
         tbc.fill = false;
         tbc.rect = rc;
 
+        /* TODO: replicate this https://itsfoss.com/ls-color-output/ */
+
         bool is_executable = (nav_sub->pwd.ref->stats.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH));
-        bool is_readable = (nav_sub->pwd.ref->stats.st_mode & (S_IRUSR | S_IRGRP | S_IROTH)) == (S_IRUSR | S_IRGRP | S_IROTH);
+        //bool is_readable = (nav_sub->pwd.ref->stats.st_mode & (S_IRUSR | S_IRGRP | S_IROTH)) == (S_IRUSR | S_IRGRP | S_IROTH);
         bool have_preview = (nav_sub->pwd.ref->content.graphic.thumb.data);
         if(have_preview) {
             default_fg.type = TUI_COLOR_8;
@@ -591,9 +593,6 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
         } else if(is_executable) {
             default_fg.type = TUI_COLOR_8;
             default_fg.col8 = 2;
-        } else if(is_readable) {
-            default_fg.type = TUI_COLOR_8;
-            default_fg.col8 = 5;
         }
         /* start by drawing icon */
         so_clear(tmp);
@@ -612,7 +611,16 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
                 case SO_FILESIG_HEIC:
                 case SO_FILESIG_FLIF:
                 case SO_FILESIG_JPEG: {
+                    default_fg.type = TUI_COLOR_8;
+                    default_fg.col8 = 5;
                     icon = " ";
+                } break;
+                case SO_FILESIG_MPEG4:
+                case SO_FILESIG_MKV:
+                case SO_FILESIG_AVI: {
+                    default_fg.type = TUI_COLOR_8;
+                    default_fg.col8 = 5;
+                    icon = " ";
                 } break;
                 case SO_FILESIG_RAR:
                 case SO_FILESIG_TAR:
@@ -632,11 +640,6 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
                 case SO_FILESIG_OGG:
                 case SO_FILESIG_MP3: {
                     icon = " ";
-                } break;
-                case SO_FILESIG_MPEG4:
-                case SO_FILESIG_MKV:
-                case SO_FILESIG_AVI: {
-                    icon = " ";
                 } break;
                 case SO_FILESIG_SCRIPT: {
                     icon = "󰯃 ";
@@ -665,6 +668,10 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
                 case S_IFREG: {
                     if(!so_cmp(ext, so(".sh"))) {
                         icon = "󰯃 ";
+                    } else if(!so_cmp(ext, so(".c"))) {
+                        icon = " ";
+                    } else if(!so_cmp(ext, so(".h"))) {
+                        icon = " ";
                     } else if(!so_cmp(ext, so(".conf"))) {
                         icon = " ";
                     } else {
