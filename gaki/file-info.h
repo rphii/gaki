@@ -55,6 +55,7 @@ typedef struct File_Info {
     So_Filesig_List signature_id;
     bool signature_unsure;
     bool exists;
+    So lnk;
     struct stat stats;
     File_Content content;
     pthread_mutex_t mtx;
