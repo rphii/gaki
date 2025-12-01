@@ -50,6 +50,7 @@ void nav_directory_layout_from_rules(Nav_Directory_Layout *layout, Tui_Rect rc, 
     } else {
         layout->rc_search = (Tui_Rect){0};
     }
+    //layout->rc.dim.y = 5;
 }
 
 void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *config, Nav_Directory *nav, Panel_Input *panel_i) {
@@ -294,6 +295,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                 if(nav->index < array_len(nav->list)) {
                     Nav_Directory *replace = array_at(nav->list, nav->index);
                     switch(replace->pwd.ref->stats.st_mode & S_IFMT) {
+                        case S_IFLNK:
                         case S_IFDIR: {
                             if(pt.y + replace->offset < array_len(replace->list)) {
                                 nav_directory_select_at(replace, sync->panel_gaki.config.show_dots, pt.y + nav->offset);
@@ -319,7 +321,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         // }
     }
 
-    bool any_shown = nav_directory_visible_count(nav, sync->panel_gaki.config.show_dots);
+    bool any_shown = nav_directory_visible_count(nav, sync->panel_gaki.config.show_dots, 0);
     if(any_shown) {
 
         if(so_len(nav->search.so)) {
@@ -357,6 +359,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                 nav = array_at(nav->list, nav->index);
             }
             switch(nav->pwd.ref->stats.st_mode & S_IFMT) {
+                case S_IFLNK:
                 case S_IFDIR: {
                     sync->panel_gaki.nav_directory = nav;
                     any = true;
@@ -546,31 +549,154 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
     //Tui_Color sel_fg = { .type = TUI_COLOR_8, .col8 = 0 };
     //Tui_Color sel_bg = { .type = TUI_COLOR_8, .col8 = 7 };
     //Tui_Fx    sel_fx = { .bold = true, .it = true, .ul = true };
-    Tui_Color dir_fg = { .type = TUI_COLOR_8, .col8 = 0 };
-    Tui_Color dir_bg = { .type = TUI_COLOR_8, .col8 = 7 };
-    Tui_Color search_fg = { .type = TUI_COLOR_8, .col8 = 3 };
-    Tui_Color search_fg2 = { .type = TUI_COLOR_8, .col8 = 0 };
-    Tui_Color search_bg2 = { .type = TUI_COLOR_8, .col8 = 3 };
+    //Tui_Color dir_fg = { .type = TUI_COLOR_8, .col8 = 0 };
+    //Tui_Color dir_bg = { .type = TUI_COLOR_8, .col8 = 7 };
+    //Tui_Color search_fg = { .type = TUI_COLOR_8, .col8 = 3 };
+    //Tui_Color search_fg2 = { .type = TUI_COLOR_8, .col8 = 0 };
+    //Tui_Color search_bg2 = { .type = TUI_COLOR_8, .col8 = 3 };
     Tui_Rect rc = layout.rc;
     rc.dim.y = 1;
     size_t list_len = array_len(nav->list);
+
+
     Tui_Buffer_Cache tbc = {0};
     //printff("RENDER: [%.*s] LEN %zu", SO_F(nav->pwd.ref->path), list_len);
     for(size_t i = nav->offset; i < list_len; ++i) {
         if(rc.anc.y >= buffer->dimension.y) break;
         Nav_Directory *nav_sub = array_at(nav->list, i);
         if(!nav_directory_visible_check(nav_sub, panel->config.show_dots, nav->filter.so)) continue;
-        tbc.fg = (nav->index == i) ? &dir_fg : 0;
-        tbc.bg = (nav->index == i) ? &dir_bg : 0;
+
+        Tui_Color default_fg = { .type = TUI_COLOR_8, .col8 = 7 };
+        Tui_Color default_bg = { .type = TUI_COLOR_8, .col8 = 0 };
+        Tui_Color search_fg = { .type = TUI_COLOR_8, .col8 = 3 };
+        Tui_Color search_bg = { .type = TUI_COLOR_8, .col8 = 0 };
+        Tui_Fx search_fx = { .bold = true, .ul = true };
+
+        /* reset tui buffer cache */
+        tbc.fg = &default_fg;
+        tbc.bg = &default_bg;
+        //tbc.fg = (nav->index == i) ? &dir_fg : 0;
+        //tbc.bg = (nav->index == i) ? &dir_bg : 0;
         //tbc.fx = (nav_sub->pwd.selected) ? &sel_fx : 0;
         //tbc.fx = (nav->index == i) ? &dir_fx : 0;
         tbc.pt = (Tui_Point){0};
         tbc.fill = false;
         tbc.rect = rc;
+
+        bool is_executable = (nav_sub->pwd.ref->stats.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH));
+        bool is_readable = (nav_sub->pwd.ref->stats.st_mode & (S_IRUSR | S_IRGRP | S_IROTH)) == (S_IRUSR | S_IRGRP | S_IROTH);
+        bool have_preview = (nav_sub->pwd.ref->content.graphic.thumb.data);
+        if(have_preview) {
+            default_fg.type = TUI_COLOR_8;
+            default_fg.col8 = 6;
+        } else if(is_executable) {
+            default_fg.type = TUI_COLOR_8;
+            default_fg.col8 = 2;
+        } else if(is_readable) {
+            default_fg.type = TUI_COLOR_8;
+            default_fg.col8 = 5;
+        }
+        /* start by drawing icon */
+        so_clear(tmp);
+        char *icon = " ";
+        if(nav_sub->pwd.ref->signature_id) {
+            switch(nav_sub->pwd.ref->signature_id) {
+                case SO_FILESIG_BMP:
+                case SO_FILESIG_BIGTIFF:
+                case SO_FILESIG_PNG:
+                case SO_FILESIG_JPEG2K:
+                case SO_FILESIG_GIF:
+                case SO_FILESIG_TIFF:
+                case SO_FILESIG_BPG:
+                case SO_FILESIG_OPENEXR:
+                case SO_FILESIG_QOI:
+                case SO_FILESIG_HEIC:
+                case SO_FILESIG_FLIF:
+                case SO_FILESIG_JPEG: {
+                    icon = " ";
+                } break;
+                case SO_FILESIG_RAR:
+                case SO_FILESIG_TAR:
+                case SO_FILESIG_XZ:
+                case SO_FILESIG_LZ4:
+                case SO_FILESIG_GZ:
+                case SO_FILESIG_ZIPLIKE:
+                case SO_FILESIG_ZLIB:
+                case SO_FILESIG_LZH:
+                case SO_FILESIG_XAR:
+                case SO_FILESIG_LZFSE:
+                case SO_FILESIG_7Z: {
+                    icon = " ";
+                } break;
+                case SO_FILESIG_FLAC:
+                case SO_FILESIG_WAV:
+                case SO_FILESIG_OGG:
+                case SO_FILESIG_MP3: {
+                    icon = " ";
+                } break;
+                case SO_FILESIG_MPEG4:
+                case SO_FILESIG_MKV:
+                case SO_FILESIG_AVI: {
+                    icon = " ";
+                } break;
+                case SO_FILESIG_SCRIPT: {
+                    icon = "󰯃 ";
+                } break;
+                case SO_FILESIG_PDF: {
+                    icon = " ";
+                } break;
+                case SO_FILESIG_TOX: {
+                    icon = "⊞ ";
+                } break;
+                case SO_FILESIG_QCOW: {
+                    icon = "󱣵 ";
+                } break;
+                case SO_FILESIG_ELF: {
+                    if(nav_sub->pwd.ref->stats.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) {
+                        icon = "󰑮 ";
+                    } else {
+                        //icon = "󰱧 ";
+                        icon = "󱅸 ";
+                    }
+                } break;
+            }
+        } else {
+            switch(nav_sub->pwd.ref->stats.st_mode & S_IFMT) {
+                case S_IFREG: {
+                    icon = "󰈤 ";
+                } break;
+                case S_IFDIR: {
+                    icon = (nav->index == i) ? "󰝰 " : "󰉋 ";
+                    default_fg.type = TUI_COLOR_8;
+                    default_fg.col8 = 4;
+                } break;
+                case S_IFLNK: {
+                    icon = " ";
+                    default_fg.type = TUI_COLOR_8;
+                    default_fg.col8 = 4;
+                } break;
+            }
+        }
+
+        if(nav->index == i) {
+            Tui_Color tmp_col = default_fg;
+            default_fg = default_bg;
+            default_bg = tmp_col;
+            tmp_col = search_fg;
+            search_fg = search_bg;
+            search_bg = tmp_col;
+        }
+        
+        size_t selind = 0, sel = nav_directory_visible_count(nav, panel->config.show_dots, &selind);
+        //so_fmt(tmp, " %s[%u/%u@%zu/%zu]", icon, i, sel, selind, panel->layout.files.rc.dim.x);
+        so_fmt(tmp, " %s", icon);
+        tui_buffer_draw_cache(buffer, &tbc, *tmp);
+
         so_clear(tmp);
         So name = so_get_nodir(nav_sub->pwd.ref->path);
         if(so_len(nav->search.so)) {
             size_t nfind = so_find_sub(name, nav->search.so, true);
+
             //printff("\r%zu/%zu:%.*s",nfind, so_len(name),SO_F(name));
             if(nfind < so_len(name)) {
 
@@ -578,8 +704,11 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
                 tui_buffer_draw_cache(buffer, &tbc, *tmp);
                 //printff("\r1 %u,%u",tbc.pt.x,tbc.pt.y);
 
-                tbc.bg = (nav->index == i) ? &search_bg2 : tbc.bg;
-                tbc.fg = (nav->index == i) ? &search_fg2 : &search_fg;
+                tbc.fg = &search_fg;
+                tbc.bg = &search_bg;
+                tbc.fx = &search_fx;
+                //tbc.bg = (nav->index == i) ? &search_bg2 : tbc.bg;
+                //tbc.fg = (nav->index == i) ? &search_fg2 : &search_fg;
 
                 so_clear(tmp);
                 so_extend(tmp, so_sub(name, nfind, nfind + so_len(nav->search.so)));
@@ -587,8 +716,12 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
                 tui_buffer_draw_cache(buffer, &tbc, *tmp);
                 //printff("\r2 %u,%u",tbc.pt.x,tbc.pt.y);
 
-                tbc.fg = (nav->index == i) ? &dir_fg : 0;
-                tbc.bg = (nav->index == i) ? &dir_bg : 0;
+                tbc.fg = &default_fg;
+                tbc.bg = &default_bg;
+                tbc.fx = 0;
+                //tbc.fg = (nav->index == i) ? &dir_fg : 0;
+                //tbc.bg = (nav->index == i) ? &dir_bg : 0;
+
                 //tbc.fg = (nav->index == i) ? &dir_fg : 0;
                 //tbc.bg = (nav->index == i) ? &dir_bg : 0;
 
@@ -644,7 +777,7 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     Nav_File_Info *pwd = &nav->pwd;
     if(!pwd->ref) goto exit;
 
-    bool any_shown = nav_directory_visible_count(nav, sync->panel_gaki.config.show_dots);
+    bool any_shown = nav_directory_visible_count(nav, sync->panel_gaki.config.show_dots, 0);
     panel_gaki_render_nav_dir(buffer, &tmp, nav, panel, panel->layout.files);
 
     /* draw current dir/file/type */
@@ -656,6 +789,7 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     if(any_shown && current && nav->pwd.ref) {
 
         switch(current->pwd.ref->stats.st_mode & S_IFMT) {
+            case S_IFLNK: { bar_bg.col8 = 4; } break;
             case S_IFDIR: { bar_bg.col8 = 4; } break;
             case S_IFREG: { bar_bg.col8 = 5; } break;
             default: break;
@@ -668,6 +802,7 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
         so_clear(&tmp);
         Tui_Rect rc_mode = panel->layout.rc_pwd;
         switch(current->pwd.ref->stats.st_mode & S_IFMT) {
+            case S_IFLNK: { so_fmt(&tmp, "[LNK]"); } break;
             case S_IFDIR: { so_fmt(&tmp, "[DIR]"); } break;
             case S_IFREG: {
                 so_fmt(&tmp, "[FILE:");
@@ -703,6 +838,7 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
                     tui_buffer_draw(buffer, panel->layout.preview.rc, 0, 0, 0, current->pwd.ref->content.text);
                 }
             } break;
+            case S_IFLNK:
             case S_IFDIR: {
                 panel_gaki_render_nav_dir(buffer, &tmp, current, panel, panel->layout.preview);
             } break;
