@@ -17,6 +17,7 @@ typedef struct Nav_Directory {
     Tui_Text_Line search;
     size_t index;
     size_t offset;
+    ssize_t scroll;
 } Nav_Directory, *Nav_Directories;
 
 void nav_directory_select_up(Nav_Directory *nav, bool show_dots, size_t n);
