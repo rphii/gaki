@@ -170,6 +170,31 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
     /* make sure we still have something selected even if filtering */
     nav_directory_select_any_next_visible(nav, sync->panel_gaki.config.show_dots);
 
+    /* move preview scroll into frame */
+    if(nav && nav->index < array_len(nav->list)) {
+        Nav_Directory *sub = array_at(nav->list, nav->index);
+        if(sub->scroll && S_ISREG(sub->pwd.ref->stats.st_mode)) {
+            bool okay = false;
+            size_t dim_y = sync->panel_gaki.layout.preview.rc.dim.y;
+            size_t n_lines = 0;
+            So lines = sub->pwd.ref->content.text;
+            So line = SO;
+            while(so_splice(lines, &line, '\n')) {
+                if(n_lines >= sub->scroll + dim_y) {
+                    okay = true;
+                    break;
+                }
+                ++n_lines;
+            }
+            if(!okay && sub->scroll + dim_y >= n_lines) {
+                sub->scroll = n_lines - dim_y;
+            }
+            if(sub->scroll < 0) {
+                sub->scroll = 0;
+            }
+        }
+    }
+
     /* put all indices into frame */
     nav_directory_offset_center(nav, sync->panel_gaki.config.show_dots, sync->panel_gaki.layout.files.rc.dim);
     if(nav && nav->parent) {
@@ -200,6 +225,8 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
     if(input->id == INPUT_TEXT) {
         switch(input->text.val) {
             case 'q': ac.quit = true; break;
+            case 'J': ac.scroll_down = 1; break;
+            case 'K': ac.scroll_up = 1; break;
             case 'j': ac.select_down = 1; break;
             case 'k': ac.select_up = 1; break;
             case 'h': ac.select_left = 1; break;
@@ -343,17 +370,31 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         }
 
         if(ac.select_up) {
-            nav_directory_select_up(sync->panel_gaki.nav_directory, sync->panel_gaki.config.show_dots, ac.select_up);
+            nav_directory_select_up(nav, sync->panel_gaki.config.show_dots, ac.select_up);
             any = true;
         }
 
         if(ac.select_down) {
-            nav_directory_select_down(sync->panel_gaki.nav_directory, sync->panel_gaki.config.show_dots, ac.select_down);
+            nav_directory_select_down(nav, sync->panel_gaki.config.show_dots, ac.select_down);
             any = true;
         }
 
+        if(ac.scroll_down) {
+            if(nav->index < array_len(nav->list)) {
+                Nav_Directory *sub = array_at(nav->list, nav->index);
+                sub->scroll += sync->panel_gaki.layout.preview.rc.dim.y / 2;
+            }
+        }
+
+        if(ac.scroll_up) {
+            if(nav->index < array_len(nav->list)) {
+                Nav_Directory *sub = array_at(nav->list, nav->index);
+                sub->scroll -= sync->panel_gaki.layout.preview.rc.dim.y / 2;
+                if(sub->scroll < 0) sub->scroll = 0;
+            }
+        }
+
         if(ac.select_right) {
-            Nav_Directory *nav = sync->panel_gaki.nav_directory;
             if(nav && nav->index < array_len(nav->list)) {
                 nav = array_at(nav->list, nav->index);
             }
@@ -492,9 +533,8 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
     }
 
     if(ac.tab_new) {
-        Nav_Directory *nav = sync->panel_gaki.nav_directory;
         if(nav->pwd.ref) {
-            *array_it(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel) = sync->panel_gaki.nav_directory;
+            *array_it(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel) = nav;
             nav_directory_dispatch_register(pw, sync_m, sync_t, sync, nav->pwd.ref->path);
         }
         any = true;
@@ -503,7 +543,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
     if(ac.tab_next) {
         size_t len = array_len(sync->panel_gaki.tabs);
         if(len > 1) {
-            *array_it(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel) = sync->panel_gaki.nav_directory;
+            *array_it(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel) = nav;
             ++sync->panel_gaki.tab_sel;
             sync->panel_gaki.tab_sel %= len;
             sync->panel_gaki.nav_directory = array_at(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel);
@@ -514,7 +554,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
     if(ac.tab_prev) {
         size_t len = array_len(sync->panel_gaki.tabs);
         if(len > 1) {
-            *array_it(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel) = sync->panel_gaki.nav_directory;
+            *array_it(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel) = nav;
             --sync->panel_gaki.tab_sel;
             if(sync->panel_gaki.tab_sel == SIZE_MAX) {
                 sync->panel_gaki.tab_sel = len - 1;
@@ -527,7 +567,6 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
     }
 
     if(ac.select_left) {
-        Nav_Directory *nav = sync->panel_gaki.nav_directory;
         Nav_Directory *parent = nav ? nav->parent : 0;
         if(parent && parent->pwd.ref && array_len(parent->pwd.ref->content.files)) {
             sync->panel_gaki.nav_directory = nav->parent;
@@ -801,7 +840,7 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
     /* draw current dir/file/type */
     Tui_Color bar_bg = { .type = TUI_COLOR_8, .col8 = 1 };
     Tui_Color bar_fg = { .type = TUI_COLOR_8, .col8 = 7 };
-    Tui_Fx bar_fx = { .bold = true };
+    Tui_Fx bar_fx = { .bold = true, .ul = true };
     Nav_Directory *current = nav->index < array_len(nav->list) ? array_at(nav->list, nav->index) : 0;
     size_t tab_len = array_len(panel->tabs);
     if(any_shown && current && nav->pwd.ref) {
@@ -856,7 +895,12 @@ void panel_gaki_render(Tui_Buffer *buffer, Gaki_Sync_Panel *sync) {
                     }
                 } else {
                     //printff("\r[%.*s]",SO_F(current->pwd.ref->content.text));
-                    tui_buffer_draw(buffer, panel->layout.preview.rc, 0, 0, 0, current->pwd.ref->content.text);
+                    Tui_Buffer_Cache tbc = {
+                        .rect = panel->layout.preview.rc,
+                        .offs.y = -current->scroll,
+                    };
+                    tui_buffer_draw_cache(buffer, &tbc, current->pwd.ref->content.text);
+                    //tui_buffer_draw(buffer, panel->layout.preview.rc, 0, 0, 0, current->pwd.ref->content.text);
                 }
             } break;
             case S_IFDIR: {
