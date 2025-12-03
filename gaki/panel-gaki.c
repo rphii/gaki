@@ -540,6 +540,8 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
     }
 
     if(ac.tab_new) {
+        /* if creating new tab on current tab, do not dispatch, but simply clone the structure over .. (which is the default thing right now anyways) */
+        /* as is, it causes flickering when creating tabs */
         if(nav->pwd.ref) {
             *array_it(sync->panel_gaki.tabs, sync->panel_gaki.tab_sel) = nav;
             nav_directory_dispatch_register(pw, sync_m, sync_t, sync, nav->pwd.ref->path);
