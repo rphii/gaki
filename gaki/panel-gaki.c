@@ -296,6 +296,13 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                     ac.select_up = 1;
                 }
             }
+            if(tui_rect_encloses_point(sync->panel_gaki.layout.preview.rc, input->mouse.pos)) {
+                if(input->mouse.scroll > 0) {
+                    ac.scroll_down = 1;
+                } else if(input->mouse.scroll < 0) {
+                    ac.scroll_up = 1;
+                }
+            }
         }
         if(nav && input->mouse.l.down) {
             if(tui_rect_encloses_point(sync->panel_gaki.layout.files.rc, input->mouse.pos)) {
