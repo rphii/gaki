@@ -425,6 +425,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                     switch(nav->pwd.ref->signature_id) {
                         case SO_FILESIG_PNG:
                         case SO_FILESIG_JPEG:
+                        case SO_FILESIG_MPEG4:
                         case SO_FILESIG_MKV: {
 
 #if 1
