@@ -70,6 +70,7 @@ For e.g. search or filter:
 - whenever: other directory sorting methods
 - whenever: update directory/files on external change
 - **(probably asap)** log/errors instead of hard quitting, when e.g. no EDITOR or child failed
+- **(probably asap)** when long path/filename .. do not only show beginning
 
 ### lower prio
 
