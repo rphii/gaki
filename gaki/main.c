@@ -110,8 +110,8 @@ int main(int argc, char **argv) {
     So out = SO;
     Gaki gaki = {
         .resized = true,
-        .config.filter_prefix = so(" "),
-        .config.search_prefix = so(" "),
+        .config.filter_prefix = so("  "),
+        .config.search_prefix = so("  "),
         .tui = tui_core_new(),
     };
 
