@@ -75,8 +75,8 @@ bool gaki_update(void *user) {
         return false;
     }
     bool render = true;
-    panel_gaki_update(&gaki->sync_panel, &gaki->pw_task, &gaki->sync.main, &gaki->sync_t_file_info, &gaki->panel_input, gaki->aspect_ratio_cell_xy);
     panel_input_update(&gaki->panel_input);
+    panel_gaki_update(&gaki->sync_panel, &gaki->pw_task, &gaki->sync.main, &gaki->sync_t_file_info, &gaki->panel_input, gaki->aspect_ratio_cell_xy);
     return render;
 }
 
