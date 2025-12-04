@@ -269,6 +269,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         panel_i->config.rc = &sync->panel_gaki.layout.files.rc_filter;
         panel_i->config.prompt =  cfg->filter_prefix;
         if(ac.filter_clear) tui_text_line_clear(panel_i->text);
+        tui_sync_main_update(sync_m);
     }
 
     if(ac.search || ac.search_clear) {
@@ -279,6 +280,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         panel_i->config.rc = &sync->panel_gaki.layout.files.rc_search;
         panel_i->config.prompt = cfg->search_prefix;
         if(ac.search_clear) tui_text_line_clear(panel_i->text);
+        tui_sync_main_update(sync_m);
     }
 
     if(input->id == INPUT_CODE) {
@@ -823,7 +825,7 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
         Tui_Color search_fg = { .type = TUI_COLOR_8, .col8 = 0 };
         Tui_Color search_bg = { .type = TUI_COLOR_8, .col8 = 3 };
         so_clear(tmp);
-        so_fmt(tmp, " %.*s", SO_F(nav->search.so));
+        so_fmt(tmp, "  %.*s", SO_F(nav->search.so));
         tui_buffer_draw(buffer, layout.rc_search, &search_fg, &search_bg, 0, *tmp);
     }
 
@@ -831,7 +833,7 @@ void panel_gaki_render_nav_dir(Tui_Buffer *buffer, So *tmp, Nav_Directory *nav, 
         Tui_Color filter_fg = { .type = TUI_COLOR_8, .col8 = 7 };
         Tui_Color filter_bg = { .type = TUI_COLOR_8, .col8 = 4 };
         so_clear(tmp);
-        so_fmt(tmp, " %.*s", SO_F(nav->filter.so));
+        so_fmt(tmp, "  %.*s", SO_F(nav->filter.so));
         tui_buffer_draw(buffer, layout.rc_filter, &filter_fg, &filter_bg, 0, *tmp);
     }
 }
