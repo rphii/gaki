@@ -173,23 +173,32 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
     /* move preview scroll into frame */
     if(nav && nav->index < array_len(nav->list)) {
         Nav_Directory *sub = array_at(nav->list, nav->index);
-        if(sub->scroll && S_ISREG(sub->pwd.ref->stats.st_mode)) {
-            bool okay = false;
+        if(sub->scroll) {
             size_t dim_y = sync->panel_gaki.layout.preview.rc.dim.y;
-            size_t n_lines = 0;
-            So lines = sub->pwd.ref->content.text;
-            So line = SO;
-            while(so_splice(lines, &line, '\n')) {
-                if(n_lines >= sub->scroll + dim_y) {
-                    okay = true;
-                    break;
+            if(S_ISREG(sub->pwd.ref->stats.st_mode)) {
+                bool okay = false;
+                size_t n_lines = 0;
+                So lines = sub->pwd.ref->content.text;
+                So line = SO;
+                while(so_splice(lines, &line, '\n')) {
+                    if(n_lines >= sub->scroll + dim_y) {
+                        okay = true;
+                        break;
+                    }
+                    ++n_lines;
                 }
-                ++n_lines;
-            }
-            if(!okay && sub->scroll + dim_y >= n_lines) {
-                sub->scroll = n_lines - dim_y;
-            }
-            if(sub->scroll < 0) {
+                if(!okay && sub->scroll + dim_y >= n_lines) {
+                    sub->scroll = n_lines - dim_y;
+                }
+                if(sub->scroll < 0) {
+                    sub->scroll = 0;
+                }
+            } else if(S_ISDIR(sub->pwd.ref->stats.st_mode)) {
+                if(sub->scroll > 0) {
+                    nav_directory_select_down(sub, sync->panel_gaki.config.show_dots, 1);
+                } else if(sub->scroll < 0) {
+                    nav_directory_select_up(sub, sync->panel_gaki.config.show_dots, 1);
+                }
                 sub->scroll = 0;
             }
         }
@@ -376,6 +385,22 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
             any = true;
         }
 
+        if(ac.scroll_down) {
+            if(nav->index < array_len(nav->list)) {
+                Nav_Directory *sub = array_at(nav->list, nav->index);
+                sub->scroll += sync->panel_gaki.layout.preview.rc.dim.y / 2;
+                any = true;
+            }
+        }
+
+        if(ac.scroll_up) {
+            if(nav->index < array_len(nav->list)) {
+                Nav_Directory *sub = array_at(nav->list, nav->index);
+                sub->scroll -= sync->panel_gaki.layout.preview.rc.dim.y / 2;
+                any = true;
+            }
+        }
+
         if(ac.select_up) {
             nav_directory_select_up(nav, sync->panel_gaki.config.show_dots, ac.select_up);
             any = true;
@@ -384,21 +409,6 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         if(ac.select_down) {
             nav_directory_select_down(nav, sync->panel_gaki.config.show_dots, ac.select_down);
             any = true;
-        }
-
-        if(ac.scroll_down) {
-            if(nav->index < array_len(nav->list)) {
-                Nav_Directory *sub = array_at(nav->list, nav->index);
-                sub->scroll += sync->panel_gaki.layout.preview.rc.dim.y / 2;
-            }
-        }
-
-        if(ac.scroll_up) {
-            if(nav->index < array_len(nav->list)) {
-                Nav_Directory *sub = array_at(nav->list, nav->index);
-                sub->scroll -= sync->panel_gaki.layout.preview.rc.dim.y / 2;
-                if(sub->scroll < 0) sub->scroll = 0;
-            }
         }
 
         if(ac.select_right) {
