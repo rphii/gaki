@@ -224,12 +224,15 @@ void *nav_directory_async_readreg(Pw *pw, bool *cancel, void *void_task) {
     bool loaded = task->nav->pwd.ref->loaded;
     bool update = false;
 
+    File_Content_List id = FILE_CONTENT_NONE;
     So content = SO;
     if(!loaded) {
         if(nav->pwd.ref->signature_id == SO_FILESIG_PNG ||
            nav->pwd.ref->signature_id == SO_FILESIG_JPEG) {
+            id = FILE_CONTENT_GRAPH;
             update = file_info_image_thumb(nav->pwd.ref);
         } else if(nav->pwd.ref->stats.st_size < 0x8000) {
+            id = FILE_CONTENT_TEXT;
             so_file_read(nav->pwd.ref->path, &content);
             nav->pwd.ref->content.text = content;
         }
@@ -251,6 +254,7 @@ void *nav_directory_async_readreg(Pw *pw, bool *cancel, void *void_task) {
             }
         }
     }
+    task->nav->pwd.ref->content.id = id;
     //render = false;
     //task->sync->panel_gaki.
     pthread_mutex_unlock(&task->sync->mtx);
@@ -356,6 +360,7 @@ void *nav_directory_async_readdir(Pw *pw, bool *cancel, void *void_task) {
     bool main_update = nav == task->nav || task->nav->parent == nav || task->nav == nav->parent; // have to update, maybe center offset
     task->nav->list = tmp.list;
     task->nav->index = index;
+    task->nav->pwd.ref->content.id = FILE_CONTENT_DIRECTORY;
     pthread_mutex_unlock(&task->sync->mtx);
 
     if(main_update) {
