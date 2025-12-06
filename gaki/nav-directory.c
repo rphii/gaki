@@ -243,10 +243,12 @@ void *nav_directory_async_readreg(Pw *pw, bool *cancel, void *void_task) {
     bool render = nav == task->nav && content.len;
     Nav_Directory *nav_own = task->sync->panel_gaki.nav_directory;
     if(nav_own && nav_own->index < array_len(nav_own->list)) {
-        Nav_Directory *nav_own_sel = array_at(nav_own->list, nav_own->index);
-        if(nav_own_sel != nav) {
-            render = false;
-            update = false;
+        if(nav_own != nav) {
+            Nav_Directory *nav_own_sel = array_at(nav_own->list, nav_own->index);
+            if(nav_own_sel != nav) {
+                render = false;
+                update = false;
+            }
         }
     }
     //render = false;
