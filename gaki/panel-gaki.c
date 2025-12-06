@@ -185,7 +185,7 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
         Nav_Directory *sub = array_at(nav->list, nav->index);
         if(sub->scroll) {
             size_t dim_y = sync->panel_gaki.layout.preview.rc.dim.y;
-            if(S_ISREG(sub->pwd.ref->stats.st_mode)) {
+            if(sub->pwd.ref->content.id == FILE_CONTENT_TEXT && S_ISREG(sub->pwd.ref->stats.st_mode)) {
                 bool okay = false;
                 size_t n_lines = 0;
                 So lines = sub->pwd.ref->content.text;
