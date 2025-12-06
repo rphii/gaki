@@ -31,14 +31,17 @@ meson install -C build
 - `h` exit folder
 - `j` file down
 - `k` file up
+- `J` preview down _(text or directory)_
+- `K` preview up _(text or directory)_
 - `l` enter folder or file via. `$EDITOR`
 - `t` create tab
 - `L` next tab
 - `H` previous tab
-- `/` enter search
-- `?` clear search & enter search
-- `f` enter filter
-- `F` clear filter & enter filter
+- `/` clear search & enter search
+- `?` enter search
+- `f` clear filter & enter filter
+- `F` enter filter
+- `.` toggle dot file visibility
 
 ### Text input
 
@@ -49,32 +52,39 @@ For e.g. search or filter:
 
 ## SOON™
 
-### I-want-this-now-prio
+### I-want-this-now-prio (100%-unchanging-roadmap®)
 
-- update directory/files on external change
+- v0.0.6 fullscreen preview toggle
+- v0.0.6 shortcut system, which should allow for..
+    - ..help listing for hotkeys
+    - ..remapping hotkeys
 
-- help for hotkeys
-- remap hotkeys
-- log/errors instead of hard quitting, when e.g. no EDITOR or child failed
-- user defined program when opening files
-- multi-select is basically already in the code
-- allow custom launch args for when launching with multi-select
+- v0.0.7 tabs with pinned ones
+- v0.0.7 grep support with preview (I have a vision of it)
+- v0.0.7 rename file(s), move file(s), delete file(s)
 
-- tabs with pinned ones... layout, how?
+- v0.0.8 use case for multi select: _(it is already coded, just not visualized, it has no functionality)_
+    - allow custom launch args for when launching with multi-select
+    - user defined program when opening files
+
+- whenever: other directory sorting methods
+- whenever: update directory/files on external change
+- **(probably asap)** log/errors instead of hard quitting, when e.g. no EDITOR or child failed
+- **(probably asap)** when long path/filename .. do not only show beginning
 
 ### lower prio
 
-- scroll text preview up/down
 - basic syntax highlighting in text?
-
 - multiple panels basically already in the code via. tabs, but I do want multi-panels as well
-
-- rename file(s), move file(s), delete file(s)
-- other directory sorting methods
 
 - video preview, scrollable
 - image preview via kitty protocol, pdf preview?
+- quit and pushd/cd into directory (with helper script)
+
 - input handling, detectable press/release for keys?
-- maybe: integrate fzf?
+
+- think about: adding infrastructure for piping custom lists/sublists into gaki, would be cool (use case?)
+    - functionality through cli
+    - should provide a library as well
 
 
