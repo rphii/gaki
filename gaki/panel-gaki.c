@@ -167,6 +167,7 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
         }
     }
     
+    // TODO.. do 'gaki $HOME' -> f.config<esc> -> . -> what do?
     /* make sure we still have something selected even if filtering */
     nav_directory_select_any_next_visible(nav, sync->panel_gaki.config.show_dots);
 
@@ -256,6 +257,21 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         }
     }
 
+    if(input->id == INPUT_CODE) {
+        if(input->code == KEY_CODE_UP) {
+            ac.select_up = 1;
+        }
+        if(input->code == KEY_CODE_DOWN) {
+            ac.select_down = 1;
+        }
+        if(input->code == KEY_CODE_LEFT) {
+            ac.select_left = 1;
+        }
+        if(input->code == KEY_CODE_RIGHT) {
+            ac.select_right = 1;
+        }
+    }
+
     if(ac.dot_toggle) {
         sync->panel_gaki.config.show_dots ^= true;
         any = true;
@@ -281,21 +297,6 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         panel_i->config.prompt = cfg->search_prefix;
         if(ac.search_clear) tui_text_line_clear(panel_i->text);
         tui_sync_main_update(sync_m);
-    }
-
-    if(input->id == INPUT_CODE) {
-        if(input->code == KEY_CODE_UP) {
-            ac.select_up = 1;
-        }
-        if(input->code == KEY_CODE_DOWN) {
-            ac.select_down = 1;
-        }
-        if(input->code == KEY_CODE_LEFT) {
-            ac.select_left = 1;
-        }
-        if(input->code == KEY_CODE_RIGHT) {
-            ac.select_right = 1;
-        }
     }
 
     if(input->id == INPUT_MOUSE) {
