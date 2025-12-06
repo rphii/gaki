@@ -241,7 +241,18 @@ void *nav_directory_async_readreg(Pw *pw, bool *cancel, void *void_task) {
 
     pthread_mutex_lock(&task->sync->mtx);
     bool render = nav == task->nav && content.len;
+    Nav_Directory *nav_own = task->sync->panel_gaki.nav_directory;
+    if(nav_own && nav_own->index < array_len(nav_own->list)) {
+        Nav_Directory *nav_own_sel = array_at(nav_own->list, nav_own->index);
+        if(nav_own_sel != nav) {
+            render = false;
+            update = false;
+        }
+    }
+    //render = false;
+    //task->sync->panel_gaki.
     pthread_mutex_unlock(&task->sync->mtx);
+
 
     //tui_sync_main_render(task->sync_m);
     if(render) {
@@ -368,7 +379,7 @@ void nav_directory_dispatch_readdir(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_F
     task->sync_m = sync_m;
     task->sync_t = sync_t;
     task->child = child;
-    pw_queue(pw, nav_directory_async_readdir, task);
+    pw_queue_front(pw, nav_directory_async_readdir, task);
 }
 
 void nav_directory_dispatch_readreg(Pw *pw, Tui_Sync_Main *sync_m, Gaki_Sync_T_File_Info *sync_t, Gaki_Sync_Panel *sync, Nav_Directory *dir) {
