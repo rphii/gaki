@@ -9,6 +9,8 @@ typedef struct Action {
     ssize_t select_down;
     ssize_t select_left;
     ssize_t select_right;
+    ssize_t scroll_down;
+    ssize_t scroll_up;
     bool tab_prev;
     bool tab_next;
     bool tab_new;
@@ -20,6 +22,7 @@ typedef struct Action {
     bool search_next;
     bool search_prev;
     bool select_toggle;
+    bool dot_toggle;
 } Action;
 
 typedef enum {
