@@ -336,7 +336,9 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         if(nav && input->mouse.l.press) {
             if(tui_rect_encloses_point(sync->panel_gaki.layout.parent.rc, input->mouse.pos)) {
                 Tui_Point pt = tui_rect_project_point(sync->panel_gaki.layout.parent.rc, input->mouse.pos);
-                if(nav->parent) {
+                Nav_Directory *parent = nav->parent;
+                // TODO: DRY, the same code is used below (ca. line 600) with the exception that this has an index..
+                if(parent && parent->pwd.ref && parent->pwd.ref->content.id == FILE_CONTENT_DIRECTORY && array_len(parent->pwd.ref->content.files)) {
                     Nav_Directory *replace = nav->parent;
                     if(pt.y + replace->offset < array_len(replace->list)) {
                         nav_directory_select_at(replace, sync->panel_gaki.config.show_dots, pt.y + nav->offset);
@@ -600,7 +602,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
 
     if(ac.select_left) {
         Nav_Directory *parent = nav ? nav->parent : 0;
-        if(parent && parent->pwd.ref && array_len(parent->pwd.ref->content.files)) {
+        if(parent && parent->pwd.ref && parent->pwd.ref->content.id == FILE_CONTENT_DIRECTORY && array_len(parent->pwd.ref->content.files)) {
             sync->panel_gaki.nav_directory = nav->parent;
             any = true;
         }
