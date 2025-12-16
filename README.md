@@ -56,16 +56,16 @@ For e.g. search or filter:
 
 ### I-want-this-now-prio (100%-unchanging-roadmap®)
 
-- v0.0.6 fullscreen preview toggle
-- v0.0.6 shortcut system, which should allow for..
+- [x] v0.0.6 fullscreen preview toggle
+- [ ] v0.0.6 shortcut system, which should allow for..
     - ..help listing for hotkeys
     - ..remapping hotkeys
 
-- v0.0.7 tabs with pinned ones
-- v0.0.7 grep support with preview (I have a vision of it)
-- v0.0.7 rename file(s), move file(s), delete file(s)
+- [ ] v0.0.7 tabs with pinned ones
+- [ ] v0.0.7 grep support with preview (I have a vision of it)
+- [ ] v0.0.7 rename file(s), move file(s), delete file(s)
 
-- v0.0.8 use case for multi select: _(it is already coded, just not visualized, it has no functionality)_
+- [ ] v0.0.8 use case for multi select: _(it is already coded, just not visualized, it has no functionality)_
     - allow custom launch args for when launching with multi-select
     - user defined program when opening files
 
