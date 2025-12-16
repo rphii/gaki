@@ -10,9 +10,10 @@
 void panel_gaki_layout_get_ratio_widths(Panel_Gaki_Config *config, unsigned int *w_files, unsigned int *w_parent, unsigned int *w_preview) {
     ssize_t width = config->rc.dim.x;
     if(config->fullscreen_preview) {
+        size_t wf = 6;
         *w_parent = 0;
-        *w_files = 3;
-        *w_preview = width - 3;
+        *w_files = width > wf ? wf : wf - width;
+        *w_preview = width > wf ? width - wf : 0;
     } else {
         double r_total = config->ratio_files + config->ratio_parent + config->ratio_preview;
         if(r_total) {
