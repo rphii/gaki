@@ -75,22 +75,23 @@ void nav_directory_select_down(Nav_Directory *nav, bool show_dots, size_t n) {
     nav_directory_select_any_next_visible(nav, show_dots);
 }
 
-void nav_directory_select_at(Nav_Directory *nav, bool show_dots, size_t i) {
+void nav_directory_select_click(Nav_Directory *nav, bool show_dots, size_t height, size_t i) {
     if(!nav) return;
     size_t len_filter = nav_directory_visible_count(nav, show_dots, 0);
     size_t len_all = array_len(nav->list);
     if(i > len_filter) {
         nav->index = SIZE_MAX;
     } else if(len_filter == len_all) {
-        nav->index = i;
+        nav->index = i + nav->offset;
     } else {
-        for(size_t ii = 0, j = 0; j < len_all; ++j) {
-            Nav_Directory *nav_sub = array_at(nav->list, j);
-            //printff("\rfind %zu @ %zu", i,j);
+        for(size_t ii = 0, j = nav->offset; j < len_all; ++j) {
+            size_t index = j;
+            Nav_Directory *nav_sub = array_at(nav->list, index);
+            //usleep(1e3);printff("\rfind %zu @ %zu", i,j);usleep(1e5);
             if(nav_directory_visible_check(nav_sub, show_dots, nav->filter.so)) {
                 //printff("\r  found %zu",ii);
-                if(ii++ >= i) {
-                    nav->index = j;
+                if(ii++ == i) {
+                    nav->index = index;
                     break;
                 }
             }

@@ -141,23 +141,41 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
         sync->panel_gaki.nav_directory = nav->parent;
     }
 
+    /* load preview from top to bottom visible indices */
     Nav_Directory *nav = sync->panel_gaki.nav_directory;
+    if(nav) {
 #if 1
-    for(size_t i = 0; nav && i < array_len(nav->list); ++i) {
-        Nav_Directory *nav_sub = array_at(nav->list, i);
-        if(nav_sub && nav_sub->pwd.ref) {
-            nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav_sub);
+        for(size_t i = nav->offset; nav && i < array_len(nav->list); ++i) {
+            Nav_Directory *nav_sub = array_at(nav->list, i);
+            if(nav_sub && nav_sub->pwd.ref) {
+                nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav_sub);
+            }
         }
-    }
+#elif 1
+        size_t len_all = array_len(nav->list);
+        for(size_t ii = 0, i = nav->offset; i < len_all; ++i) {
+            Nav_Directory *nav_sub = array_at(nav->list, i);
+            if(!nav_directory_visible_check(nav_sub, sync->panel_gaki.config.show_dots, nav->filter.so)) {
+                continue;
+            }
+            if(ii++ >= sync->panel_gaki.layout.files.rc.dim.y) {
+                break;
+            }
+            if(nav_sub && nav_sub->pwd.ref) {
+                nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav_sub);
+            }
+        }
 #else
-    if(nav->index < array_len(nav->list)) {
-        Nav_Directory *nav_sub = array_at(nav->list, nav->index);
-        if(nav_sub && nav_sub->pwd.ref) {
-            nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav_sub);
+        if(nav->index < array_len(nav->list)) {
+            Nav_Directory *nav_sub = array_at(nav->list, nav->index);
+            if(nav_sub && nav_sub->pwd.ref) {
+                nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav_sub);
+            }
         }
-    }
 #endif
+    }
 
+    /* make thumbnail from current preview */
     if(nav && nav->index < array_len(nav->list)) {
         Nav_Directory *current = array_at(nav->list, nav->index);
         pthread_mutex_lock(&current->pwd.mtx);
@@ -167,6 +185,7 @@ void panel_gaki_update(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gak
         }
         pthread_mutex_unlock(&current->pwd.mtx);
     }
+
     //if(nav && nav->pwd.ref) {
     //    usleep(1e5);printff("\rnav->pwd.ref: %p, have_read %u, exists %u", nav->pwd.ref, nav->pwd.have_read, nav->pwd.ref->exists);usleep(1e6);
     //    if(nav->pwd.have_read && !nav->pwd.ref->exists) {
@@ -347,7 +366,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
         if(nav && input->mouse.l.down) {
             if(tui_rect_encloses_point(sync->panel_gaki.layout.files.rc, input->mouse.pos)) {
                 Tui_Point pt = tui_rect_project_point(sync->panel_gaki.layout.files.rc, input->mouse.pos);
-                nav_directory_select_at(nav, sync->panel_gaki.config.show_dots, pt.y + nav->offset);
+                nav_directory_select_click(nav, sync->panel_gaki.config.show_dots, sync->panel_gaki.layout.files.rc.dim.y, pt.y);
                 //nav->index = pt.y + nav->offset;
                 any = true;
             }
@@ -360,7 +379,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                 if(parent && parent->pwd.ref && parent->pwd.ref->content.id == FILE_CONTENT_DIRECTORY && array_len(parent->pwd.ref->content.files)) {
                     Nav_Directory *replace = nav->parent;
                     if(pt.y + replace->offset < array_len(replace->list)) {
-                        nav_directory_select_at(replace, sync->panel_gaki.config.show_dots, pt.y + nav->offset);
+                        nav_directory_select_click(replace, sync->panel_gaki.config.show_dots, sync->panel_gaki.layout.files.rc.dim.y, pt.y);
                     }
                     sync->panel_gaki.nav_directory = replace;
                     any = true;
@@ -373,7 +392,7 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                     switch(replace->pwd.ref->stats.st_mode & S_IFMT) {
                         case S_IFDIR: {
                             if(pt.y + replace->offset < array_len(replace->list)) {
-                                nav_directory_select_at(replace, sync->panel_gaki.config.show_dots, pt.y + nav->offset);
+                                nav_directory_select_click(replace, sync->panel_gaki.config.show_dots, sync->panel_gaki.layout.files.rc.dim.y, pt.y);
                             }
                             sync->panel_gaki.nav_directory = replace;
                             any = true;

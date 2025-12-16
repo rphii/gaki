@@ -22,7 +22,7 @@ typedef struct Nav_Directory {
 
 void nav_directory_select_up(Nav_Directory *nav, bool show_dots, size_t n);
 void nav_directory_select_down(Nav_Directory *nav, bool show_dots, size_t n);
-void nav_directory_select_at(Nav_Directory *nav, bool show_dots, size_t i);
+void nav_directory_select_click(Nav_Directory *nav, bool show_dots, size_t height, size_t i);
 void nav_directory_select_any_next_visible(Nav_Directory *nav, bool show_dots);
 void nav_directory_select_any_prev_visible(Nav_Directory *nav, bool show_dots);
 void nav_directory_offset_center(Nav_Directory *nav, bool show_dots, Tui_Point dim);
