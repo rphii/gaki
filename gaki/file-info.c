@@ -20,13 +20,16 @@ bool file_info_image_thumb(File_Info *info) {
     if(!img.h || !img.w) return result;
 #if true
     /* make thumbnail */
-    File_Image rez = { .ch = img.ch };
-    rez.w = 200;
-    rez.h = round((double)(img.h) / (double)(img.w) * (double)rez.w);
-    //printff("\r%u x %u -> %u x %u",img.w,img.h,rez.w,rez.h);usleep(1e6);
-    rez.data = malloc(rez.w * rez.h * rez.ch);
-    stbir_resize_uint8_linear(img.data, img.w, img.h, 0, rez.data, rez.w, rez.h, 0, rez.ch);
-    info->content.graphic.thumb = rez;
+    int w_thumb = 240;
+    if(img.w > w_thumb) {
+        File_Image rez = { .ch = img.ch };
+        rez.w = w_thumb;
+        rez.h = round((double)(img.h) / (double)(img.w) * (double)rez.w);
+        //printff("\r%u x %u -> %u x %u",img.w,img.h,rez.w,rez.h);usleep(1e6);
+        rez.data = malloc(rez.w * rez.h * rez.ch);
+        stbir_resize_uint8_linear(img.data, img.w, img.h, 0, rez.data, rez.w, rez.h, 0, rez.ch);
+        info->content.graphic.thumb = rez;
+    }
     /* free up original image */
     free(img.data);
 #else

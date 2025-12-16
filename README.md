@@ -33,7 +33,7 @@ meson install -C build
 - `k` file up
 - `J` preview down _(text or directory)_
 - `K` preview up _(text or directory)_
-- `l` enter folder or file via. `$EDITOR`
+- `l` enter folder
 - `t` create tab
 - `L` next tab
 - `H` previous tab
@@ -42,6 +42,8 @@ meson install -C build
 - `f` clear filter & enter filter
 - `F` enter filter
 - `.` toggle dot file visibility
+- `p` toggle preview fullscreen
+- `enter` enter file _(text,png,jpg,mkv,mp4)_
 
 ### Text input
 

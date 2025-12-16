@@ -9,16 +9,22 @@
 
 void panel_gaki_layout_get_ratio_widths(Panel_Gaki_Config *config, unsigned int *w_files, unsigned int *w_parent, unsigned int *w_preview) {
     ssize_t width = config->rc.dim.x;
-    double r_total = config->ratio_files + config->ratio_parent + config->ratio_preview;
-    if(r_total) {
-        *w_parent = round((double)(width * config->ratio_parent) / r_total);
-        *w_files = round((double)(width * config->ratio_files) / r_total);
-        *w_preview = round((double)(width * config->ratio_preview) / r_total);
+    if(config->fullscreen_preview) {
+        *w_parent = 0;
+        *w_files = 3;
+        *w_preview = width - 3;
     } else {
-        r_total = 7;
-        *w_parent = round((double)(width * 1) / r_total);
-        *w_files = round((double)(width * 3) / r_total);
-        *w_preview = round((double)(width * 3) / r_total);
+        double r_total = config->ratio_files + config->ratio_parent + config->ratio_preview;
+        if(r_total) {
+            *w_parent = round((double)(width * config->ratio_parent) / r_total);
+            *w_files = round((double)(width * config->ratio_files) / r_total);
+            *w_preview = round((double)(width * config->ratio_preview) / r_total);
+        } else {
+            r_total = 7;
+            *w_parent = round((double)(width * 1) / r_total);
+            *w_files = round((double)(width * 3) / r_total);
+            *w_preview = round((double)(width * 3) / r_total);
+        }
     }
 }
 
@@ -87,6 +93,8 @@ void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *
         rc_parent.anc.x = 0;
         rc_parent.dim.x = w_parent - 1;
     } else {
+        layout->rc_split_parent.anc.x = 0;
+        layout->rc_split_parent.dim.x = 0;
         rc_parent.dim.x = 0;
     }
 
@@ -101,6 +109,8 @@ void panel_gaki_layout_from_rules(Panel_Gaki_Layout *layout, Panel_Gaki_Config *
         rc_preview.anc.x = w_parent + w_files + 1;
         rc_preview.dim.x = config->rc.dim.x - rc_preview.anc.x;
     } else {
+        layout->rc_split_preview.anc.x = 0;
+        layout->rc_split_preview.dim.x = 0;
         rc_preview.dim.x = 0;
     }
 
@@ -261,12 +271,16 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
             case 'N': ac.search_prev = true; break;
             case 'v': ac.select_toggle = true; break;
             case '.': ac.dot_toggle = true; break;
+            case 'p': ac.fullscreen_toggle = true; break;
             //case '/': gaki->ac. = 1; break;
             default: break;
         }
     }
 
     if(input->id == INPUT_CODE) {
+        if(input->code == KEY_CODE_ENTER) {
+            ac.select_enter = true;
+        }
         if(input->code == KEY_CODE_UP) {
             ac.select_up = 1;
         }
@@ -283,6 +297,11 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
 
     if(ac.dot_toggle) {
         sync->panel_gaki.config.show_dots ^= true;
+        any = true;
+    }
+    
+    if(ac.fullscreen_toggle) {
+        sync->panel_gaki.config.fullscreen_preview ^= true;
         any = true;
     }
 
@@ -434,6 +453,14 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                     sync->panel_gaki.nav_directory = nav;
                     any = true;
                 } break;
+                default: break;
+            }
+        }
+        if(ac.select_enter) {
+            if(nav && nav->index < array_len(nav->list)) {
+                nav = array_at(nav->list, nav->index);
+            }
+            switch(nav->pwd.ref->stats.st_mode & S_IFMT) {
                 case S_IFREG: {
 
                     switch(nav->pwd.ref->signature_id) {
