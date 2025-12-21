@@ -577,10 +577,6 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                             system("tput smcup");
                             tui_write_cstr(TUI_ESC_CODE_MOUSE_ON);
 
-                            so_free(&nav->pwd.ref->content.text);
-                            nav->pwd.have_read = false;
-                            nav_directory_dispatch_readany(pw, sync_m, sync_t, sync, nav);
-
                             /* resume input */
                             tui_sync_input_wake(sync_i);
 
