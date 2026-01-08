@@ -102,7 +102,7 @@ File_Info *file_info_ensure(Gaki_Sync_T_File_Info *sync, So path) {
             so_filesig(path, &info_new.signature_unsure, &info_new.signature_id);
         }
         free(cpath);
-        T_File_InfoKV *kv = t_file_info_once(&sync->t_file_info, info_new.path, &info_new);
+        T_File_Info_KV *kv = t_file_info_once(&sync->t_file_info, info_new.path, &info_new);
         if(!kv) {
             usleep(1e5);
             printff("unreachable error, lookup table expected: [%.*s] but nothing got", SO_F(info_new.path));
