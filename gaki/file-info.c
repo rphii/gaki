@@ -16,6 +16,7 @@ bool file_info_image_thumb(File_Info *info) {
     char *cpath = so_dup(info->path);
     File_Image img = {0};
     img.data = stbi_load(cpath, &img.w, &img.h, &img.ch, 0);
+    free(cpath);
     if(!img.data) return result;
     if(!img.h || !img.w) return result;
 #if true
@@ -159,7 +160,8 @@ void *task_file_info_image_cvt_async(Pw *pw, bool *quit, void *void_task) {
     tbc.rect.dim = task->dim;
     tbc.rect.dim.y = 1;
     //tbc.rect.dim.y = 1;
-    So pix = so("▀");
+    //So pix = so("▀");
+    So pix = so("▄");
     for(size_t y = 0; y < rez.h; y += 2) {
         for(size_t x = 0; x < rez.w; ++x) {
             tbc.bg = 0;
@@ -171,7 +173,7 @@ void *task_file_info_image_cvt_async(Pw *pw, bool *quit, void *void_task) {
                 if(ch == 0) fg.r = byte;
                 if(ch == 1) fg.g = byte;
                 if(ch == 2) fg.b = byte;
-                tbc.fg = &fg;
+                tbc.bg = &fg;
             }
             if(y + 1 < rez.h) {
                 for(size_t ch = 0; ch < rez.ch; ++ch) {
@@ -180,7 +182,7 @@ void *task_file_info_image_cvt_async(Pw *pw, bool *quit, void *void_task) {
                     if(ch == 1) bg.g = byte;
                     if(ch == 2) bg.b = byte;
                 }
-                tbc.bg = &bg;
+                tbc.fg = &bg;
             }
             tui_buffer_draw_cache(&gfx->cvt_buf, &tbc, pix);
         }

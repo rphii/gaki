@@ -513,6 +513,8 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                                 execvp(cprg, cargs);
                                 close(fd);
                                 _exit(EXIT_FAILURE);
+                                free(cprg);
+                                free(cpath);
                             }
 
                             // int status;
@@ -563,7 +565,11 @@ bool panel_gaki_input(Gaki_Sync_Panel *sync, Pw *pw, Tui_Sync_Main *sync_m, Gaki
                                 system("tput rmcup");
                                 execvp(ced, cargs);
                                 _exit(EXIT_FAILURE);
+                                free(ced);
+                                free(cpath);
                             }
+
+                            so_free(&ed);
 
                             int status;
                             waitpid(pid, &status, 0);
